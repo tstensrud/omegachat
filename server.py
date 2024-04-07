@@ -14,8 +14,15 @@ server.listen()
 encoding = "ascii"
 
 clients = []
-nicknames = []
+nicknames = ["name"]
 # date = datetime.datetime.now().strftime("%H:%M:%S")
+
+def find_nick_name(name):
+    for nickname in nicknames:
+        if nickname == name:
+            return True
+    return False
+
 def broadcast(message):
     for client in clients:
         client.send(f"{message}".encode(encoding))
@@ -23,7 +30,7 @@ def broadcast(message):
 def handle(client):
     while True:
         try:
-            date = datetime.datetime.now().strftime("%H:%M:%S")
+            date = datetime.datetime.now().strftime("[%H:%M:%S]")
             message = client.recv(1024).decode(encoding)
             broadcast(f"{date} {message}")
         except:
@@ -35,23 +42,23 @@ def handle(client):
             nicknames.remove(nickname)
             break
 
-def receive():
+def client_connection():
     while True:
         client, address = server.accept()
         print(f"Connected {str(address)}")
-
         client.send("NICK".encode(encoding))
         nickname = client.recv(1024).decode(encoding)
-        nicknames.append(nickname)
-        clients.append(client)
+        if find_nick_name(nickname):
+            client.send("Err-1".encode(encoding))
+        else: 
+            nicknames.append(nickname)
+            clients.append(client)
+            broadcast(f"{nickname} joined the chat.")
+            client.send("Connected to the server".encode(encoding))
 
-        print(f"Nickname of client is {nickname}.")
-        broadcast(f"{nickname} joined the chat.".encode(encoding))
-        client.send("Connected to the server".encode(encoding))
-
-        thread = threading.Thread(target=handle, args=(client,))
-        thread.start()
+            thread = threading.Thread(target=handle, args=(client,))
+            thread.daemon = True
+            thread.start()
 
 print("Server is running")
-receive()
-
+client_connection()
