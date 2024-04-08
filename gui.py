@@ -9,7 +9,7 @@ from client import Client
 class Gui:
     def __init__(self):
         self.client = Client(None, None, None, None)
-        self.encoding = "ascii"
+        self.encoding = self.client.encoding
         
         # flag for the receive msg thread
         self.stop_flag = False
@@ -50,12 +50,14 @@ class Gui:
         self.options_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.options_menu.add_command(label="Connect")
         self.options_menu.add_command(label="Disonnect", command=self.disconnect)
-        self.options_menu.add_command(label="Exit", command=exit)
+        self.options_menu.add_command(label="Exit", command=self.exit)
         self.menu_bar.add_cascade(label="Options", menu=self.options_menu)
         
         self.root.config(menu=self.menu_bar)
         self.root.mainloop()
 
+    def change_window_title(self, title):
+        self.root.title(f"Omegachat - logged in as {title}")
 
     def client_object(self):
         return self.client
@@ -76,8 +78,13 @@ class Gui:
         self.chat_window.insert(tk.END, "Disconnected.")
 
     def exit(self):
-        self.disconnect()
-        sys.exit()
+        try:
+            self.disconnect()
+            sys.exit()
+        except Exception as e:
+            print(e)
+            self.client.disconnect()
+            sys.exit(1)
 
     def new_message(self):
         while self.stop_flag == True:
@@ -90,10 +97,12 @@ class Gui:
                 self.client.client.close()
                 break 
 
-    def login_gui(self): 
-        connect = self.client.login(self.nick_entry.get())
+    def login_gui(self):
+        nick = self.nick_entry.get()
+        connect = self.client.login(nick)
         if connect == "Err-1":
             messagebox.showerror("Error", "Name is allready taken")
+            nick = ""
             return
         else:
             self.start_frame.forget()
@@ -102,6 +111,7 @@ class Gui:
             self.chat_message.pack(fill="x", side="bottom")
             self.chat_window.pack(side="top", fill="both", expand=True)
             self.alias_list.pack(fill="both", expand=True)
+            self.change_window_title(nick)
             
             self.newmsg_thread(True)
     

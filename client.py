@@ -23,7 +23,7 @@ class Client:
                     self.client.close()
                     return message
                 print("Nick accepted")
-            #self.start_receive()
+            
 
         except Exception as e:
             print(f"Connection-error: {e}")
@@ -32,6 +32,7 @@ class Client:
     def write(self, input):
         message = f"{self.nickname}: {input}"
         self.client.send(message.encode(self.encoding))
+
 
     def disconnect(self):
         self.client.close()
