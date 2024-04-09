@@ -4,7 +4,7 @@ class Client:
     def __init__(self, HOST, PORT, client, nickname):
         self.HOST = "127.0.0.1"
         self.PORT = 55555
-        self.encoding = "ascii"
+        self.encoding = "utf-8"
         self.client = None
         self.nickname = None
 
@@ -23,16 +23,18 @@ class Client:
                     self.client.close()
                     return message
                 print("Nick accepted")
-            
-
         except Exception as e:
             print(f"Connection-error: {e}")
-
 
     def write(self, input):
         message = f"{self.nickname}: {input}"
         self.client.send(message.encode(self.encoding))
 
+    def get_user_names_from_server(self):
+        pass
+    
+    def change_nick(self, nick):
+        pass
 
     def disconnect(self):
         self.client.close()

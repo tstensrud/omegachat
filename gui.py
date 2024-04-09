@@ -56,20 +56,35 @@ class Gui:
         self.root.config(menu=self.menu_bar)
         self.root.mainloop()
 
+    # methods for GUI handling
     def change_window_title(self, title):
         self.root.title(f"Omegachat - logged in as {title}")
-
-    def client_object(self):
-        return self.client
-   
     def frame_resizing(self, event):
         self.chat_frame.config(width=event.width)
+    def messag_from_app(self, message): # local messages to chat window from the app
+        self.chat_window.insert(tk.END, f"{message}\n")
+        self.chat_window.yview(tk.END)
+    
+    # chat command-shortcuts
+    def chat_commands(self, command):
+        if command == "disconnect":
+            self.disconnect()
+        elif command == "nick":
+            self.messag_from_app("nick")
+        else:
+            self.messag_from_app("Command not found.")
 
+    # read input in chat_message and handle it.
     def send(self, event):
         message = self.chat_message.get()
-        self.client.write(message)
-        self.chat_message.delete(0, tk.END)
-        self.chat_window.yview(tk.END)
+        if message[0] == "/":
+            self.chat_commands(message[1:])
+            self.chat_message.delete(0, tk.END)
+            self.chat_window.yview(tk.END)
+        else:
+            self.client.write(message)
+            self.chat_message.delete(0, tk.END)
+            self.chat_window.yview(tk.END)
 
     def disconnect(self):
         self.newmsg_thread(False)
@@ -86,6 +101,7 @@ class Gui:
             self.client.disconnect()
             sys.exit(1)
 
+    # receive new messages from server and write them to chat window
     def new_message(self):
         while self.stop_flag == True:
             try:
@@ -115,6 +131,7 @@ class Gui:
             
             self.newmsg_thread(True)
     
+    # multi thread for receiving new messages from server
     def newmsg_thread(self, running):
         if running == True:
             self.stop_flag = True
