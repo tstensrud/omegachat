@@ -8,7 +8,7 @@ from tkinter import scrolledtext
 
 class Client:
     def __init__(self):
-        self.nickname = None
+        self.nickname: str = ""
         self.encoding = "utf-8"
         self.socket = None
         self.connected_users = None
@@ -64,16 +64,18 @@ class Client:
         self.root.mainloop()
 
     # methods for GUI handling
-    def change_window_title(self, title):
+    def change_window_title(self, title) -> None:
         self.root.title(f"Omegachat - logged in as {title}")
-    def frame_resizing(self, event):
+    def frame_resizing(self, event) -> None:
         self.chat_frame.config(width=event.width)
-    def internal_message(self, message): # local messages to chat window from the app
+    def internal_message(self, message) -> None: # local messages to chat window from the app
         self.chat_window.insert(tk.END, f"{message}\n")
         self.chat_window.yview(tk.END)
-    
+    def insert_to_alias_list(self, nickname) -> None:
+        self.alias_list.insert(tk.END, nickname)
+
     # chat command-shortcuts
-    def chat_commands(self, command):
+    def chat_commands(self, command) -> None:
         if command == "disconnect":
             self.disconnect()
         elif command == "nick":
@@ -82,7 +84,7 @@ class Client:
             self.internal_message("Command not found.")
 
     # read input from chat_entry and handle it.
-    def send(self, event):
+    def send(self, event) -> None:
         input_read = self.chat_message.get()
         message = f"{self.nickname}: {input_read}"
         if input_read[0] == "/":
@@ -94,13 +96,13 @@ class Client:
             self.chat_message.delete(0, tk.END)
             self.chat_window.yview(tk.END)
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         self.newmsg_thread(False)
         self.socket.close()
         time.sleep(1)
         self.chat_window.insert(tk.END, "Disconnected.")
 
-    def exit(self):
+    def exit(self) -> None:
         try:
             self.disconnect()
             sys.exit()
@@ -110,7 +112,7 @@ class Client:
             sys.exit(1)
 
     # receive new messages from server and write them to chat window
-    def incomming_msg_loop(self):
+    def incomming_msg_loop(self) -> None:
         while self.stop_flag == True:
             try:
                 message=self.socket.recv(1024).decode(self.encoding)
@@ -121,7 +123,9 @@ class Client:
                 self.socket.close()
                 break 
 
-    def login_gui(self):
+    # logging in and establishing connection to the server through a web socket.
+    # if chosen nickname is already taken it closes the socket and returns
+    def login_gui(self) -> None:
         nick = self.nick_entry.get()
         HOST = self.host_entry.get()
 
@@ -135,23 +139,26 @@ class Client:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
             self.internal_message(f"Connecting to: {HOST}:{PORT}")
-            self.socket.send(f"{nick}".encode(self.encoding))
-            nick_response = self.socket.recv(1024).decode(self.encoding)
+            self.socket.send(f"{nick}".encode(self.encoding)) # send nick to server
+            nick_response = self.socket.recv(1024).decode(self.encoding) # receives response on nick. will be "err-1" if nick is taken
             
             if nick_response == "Err-1":
-                messagebox.showerror("Error", "Name is allready taken")
+                messagebox.showerror("Error", "Name is already taken")
                 self.socket.close()
                 return
             else:
                 self.nickname = nick
+                # forget login-frame and pack the chat-frames
                 self.start_frame.forget()
                 self.chat_frame.pack(fill="both", side="left", expand=True)
                 self.client_frame.pack(fill="both", side="right")
                 self.chat_message.pack(fill="x", side="bottom")
                 self.chat_window.pack(side="top", fill="both", expand=True)
                 self.alias_list.pack(fill="both", expand=True)
+
                 self.internal_message(nick_response)
-                self.change_window_title(nick)
+                self.change_window_title(self.nickname)
+                self.insert_to_alias_list(self.nickname)
                 self.newmsg_thread(True)
 
                 print("Nick accepted")
@@ -159,7 +166,7 @@ class Client:
             print(f"Connection-error: {e}")
     
     # multi thread for receiving new messages from server
-    def newmsg_thread(self, running):
+    def newmsg_thread(self, running) -> None:
         if running == True:
             self.stop_flag = True
             receive_message_from_server = threading.Thread(target=self.incomming_msg_loop)
@@ -167,6 +174,6 @@ class Client:
         if running == False:
             self.stop_flag = False
             
-    def broadcast_msg_to_server(self, input):
-        message = f"{self.nickname}: {input}"
+    def broadcast_msg_to_server(self, text) -> None:
+        message = f"{self.nickname}: {text}"
         self.socket.send(message.encode(self.encoding))

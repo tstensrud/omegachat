@@ -5,6 +5,7 @@ import datetime
 import tkinter as tk
 from server_client import ServerClient
 from tkinter import scrolledtext
+from typing import List
 
 
 class OmegachatServer:
@@ -42,14 +43,14 @@ class OmegachatServer:
         self.root.mainloop()
         
 
-    def frame_resizing(self, event):
+    def frame_resizing(self, event) -> None:
         self.main_frame.config(width=event.width)
     
-    def date(self):
+    def date(self) -> str:
         return datetime.datetime.now().strftime("[%Y-%M-%d %H:%M:%S]")
 
     # messages for activites on server
-    def server_message(self, message, date):
+    def server_message(self, message, date) -> None:
         if date == True:
             self.output.insert(tk.END, f"{self.date()}: {message}\n")
         else:
@@ -57,7 +58,7 @@ class OmegachatServer:
         self.output.yview(tk.END)
 
     # start server and thread for accepting new clients
-    def start_server(self):
+    def start_server(self) -> None:
         self.server_running = True
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind((self.HOST, self.PORT))
@@ -68,17 +69,17 @@ class OmegachatServer:
         self.server_message("Server started.", True)
     
     # stop server
-    def stop_server(self):
+    def stop_server(self) -> None:
         self.server_running = False
         self.server_message(f"Stopped server", True)
 
     # exit server-program
-    def exit(self):
+    def exit(self) -> None:
         self.stop_server()
         sys.exit()
 
     # find nickname. return True if found
-    def find_nick_name(self, name):
+    def find_nick_name(self, name) -> bool:
         for i in range(len(self.clients)):
             if self.clients[i].get_nickname() == name:
                 return True
@@ -92,9 +93,16 @@ class OmegachatServer:
             self.server_message("Connected users nicknames and IPs:", False)
             for client in self.clients:
                 self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
-    
+
+    # return all nicknames on server
+    def all_connected_nicknames(self) -> List[str]:
+        nicknames = []
+        for nickname in self.clients:
+            nicknames.append(self.clients.get_nickname())
+        return nicknames
+
     # broadcast message to all connected users
-    def broadcast(self, message):
+    def broadcast(self, message) -> None:
         message_out = message.encode(self.encoding)
         for client in self.clients:
             try:
@@ -102,21 +110,24 @@ class OmegachatServer:
             except Exception as e:
                 self.server_message(e, True)
 
+    def update_nicknames_to_clients(self) -> None:
+        nicknames = self.all_connected_nicknames()
+
     # return a list of all nicknames to display on client side
-    def get_connected_users(self):
+    def get_connected_users(self) -> List[str]:
         nicknames = []
         for client in self.clients:
             nicknames.append(client.get_nickname())
         return nicknames
 
-    def return_client_index(self, name):
+    def return_client_index(self, name) -> int:
         for i in range(len(self.clients)):
             if self.clients[i].get_nickname == name:
                 return i
         return -1
 
     # handle incoming messages from a client and call broadcast()
-    def handle(self, client):
+    def handle(self, client) -> None:
         socket = client.get_socket()
         nick_name = client.get_nickname()
         while self.server_running == True:
@@ -131,7 +142,7 @@ class OmegachatServer:
                 break
     
     # handle incoming connections and starting handle() for each incoming client
-    def client_connection(self):
+    def client_connection(self) -> None:
         while self.server_running == True:
             socket, ip = self.server.accept()
             nickname = socket.recv(1024).decode(self.encoding)
