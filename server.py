@@ -109,8 +109,14 @@ class OmegachatServer:
             nicknames.append(client.get_nickname())
         return nicknames
 
-    # handle incoming messages and call broadcast()
-    def handle(self, client, index):
+    def return_client_index(self, name):
+        for i in range(len(self.clients)):
+            if self.clients[i].get_nickname == name:
+                return i
+        return -1
+
+    # handle incoming messages from a client and call broadcast()
+    def handle(self, client):
         socket = client.get_socket()
         nick_name = client.get_nickname()
         while self.server_running == True:
@@ -121,25 +127,22 @@ class OmegachatServer:
             except:
                 self.broadcast(f"{nick_name} left the chat")
                 socket.close()
-                self.clients.pop(index)
+                self.clients.pop(self.return_client_index(nick_name))
                 break
-
-    # handle incoming connections and starting handle for each incoming client
+    
+    # handle incoming connections and starting handle() for each incoming client
     def client_connection(self):
         while self.server_running == True:
             socket, ip = self.server.accept()
-            self.server_message(f"Connected {str(ip)}", True)
-            socket.send("NICK".encode(self.encoding))
             nickname = socket.recv(1024).decode(self.encoding)
-            
+            self.server_message(f"{nickname} connected {str(ip)}", True)
             if self.find_nick_name(nickname):
                 socket.send("Err-1".encode(self.encoding))
             else:
                 client = ServerClient(socket, ip, nickname)
                 self.clients.append(client)
-                index = len(self.clients) - 1
                 self.broadcast(f"{client.get_nickname()} joined the chat.")
                 socket.send("Connected to the server".encode(self.encoding))
-                thread = threading.Thread(target=self.handle, args=(client,index,))
+                thread = threading.Thread(target=self.handle, args=(client,))
                 thread.daemon = True
                 thread.start()

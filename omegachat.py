@@ -1,8 +1,8 @@
-from gui import Gui
 from client import Client
 
+
 def main():
-    gui = Gui()
+    gui = Client()
 
 if __name__ == "__main__":
     main()
