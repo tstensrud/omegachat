@@ -49,7 +49,7 @@ class OmegachatServer:
     def date(self) -> str:
         return datetime.datetime.now().strftime("[%Y-%M-%d %H:%M:%S]")
 
-    # messages for activites on server
+    # messages the server writes to its own output
     def server_message(self, message, date) -> None:
         if date == True:
             self.output.insert(tk.END, f"{self.date()}: {message}\n")
@@ -85,7 +85,7 @@ class OmegachatServer:
                 return True
         return False
 
-    # list all connected users
+    # list all connected users in the server-output
     def list_connected_users(self):
         if len(self.clients) == 0:
             self.server_message("No users connected", False)
@@ -93,13 +93,6 @@ class OmegachatServer:
             self.server_message("Connected users nicknames and IPs:", False)
             for client in self.clients:
                 self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
-
-    # return all nicknames on server
-    def all_connected_nicknames(self) -> List[str]:
-        nicknames = []
-        for nickname in self.clients:
-            nicknames.append(self.clients.get_nickname())
-        return nicknames
 
     # broadcast message to all connected users
     def broadcast(self, message) -> None:
@@ -126,7 +119,7 @@ class OmegachatServer:
                 return i
         return -1
 
-    # handle incoming messages from a client and call broadcast()
+    # handle incoming messages from a client and call necessary methods based on input
     def handle(self, client) -> None:
         socket = client.get_socket()
         nick_name = client.get_nickname()
@@ -134,7 +127,11 @@ class OmegachatServer:
             try:
                 date = datetime.datetime.now().strftime("[%H:%M:%S]")
                 message = socket.recv(1024).decode(self.encoding)
-                self.broadcast(f"{date} {message}")
+                self.server_message(message, True)
+                if message[0] != ">":
+                    self.server_message(message[1:]) # if > is not at index 0, its a que for server-methods. Call broadcast when > is at index 0
+                else:
+                    self.broadcast(f"{date} {message[1:]}") # broadcast message without the ">" symbol
             except:
                 self.broadcast(f"{nick_name} left the chat")
                 socket.close()
