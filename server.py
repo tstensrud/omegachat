@@ -50,7 +50,7 @@ class OmegachatServer:
         return datetime.datetime.now().strftime("[%Y-%M-%d %H:%M:%S]")
 
     # messages the server writes to its own output
-    def server_message(self, message, date) -> None:
+    def server_message(self, message: str, date: bool) -> None:
         if date == True:
             self.output.insert(tk.END, f"{self.date()}: {message}\n")
         else:
@@ -79,7 +79,7 @@ class OmegachatServer:
         sys.exit()
 
     # find nickname. return True if found
-    def find_nick_name(self, name) -> bool:
+    def find_nick_name(self, name: str) -> bool:
         for i in range(len(self.clients)):
             if self.clients[i].get_nickname() == name:
                 return True
@@ -95,16 +95,13 @@ class OmegachatServer:
                 self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
 
     # broadcast message to all connected users
-    def broadcast(self, message) -> None:
+    def broadcast(self, message: str) -> None:
         message_out = message.encode(self.encoding)
         for client in self.clients:
             try:
                 client.get_socket().send(message_out)
             except Exception as e:
                 self.server_message(e, True)
-
-    def update_nicknames_to_clients(self) -> None:
-        nicknames = self.all_connected_nicknames()
 
     # return a list of all nicknames to display on client side
     def get_connected_users(self) -> List[str]:
@@ -113,7 +110,7 @@ class OmegachatServer:
             nicknames.append(client.get_nickname())
         return nicknames
 
-    def return_client_index(self, name) -> int:
+    def return_client_index(self, name: str) -> int:
         for i in range(len(self.clients)):
             if self.clients[i].get_nickname == name:
                 return i
@@ -127,11 +124,16 @@ class OmegachatServer:
             try:
                 date = datetime.datetime.now().strftime("[%H:%M:%S]")
                 message = socket.recv(1024).decode(self.encoding)
-                self.server_message(message, True)
                 if message[0] != ">":
-                    self.server_message(message[1:]) # if > is not at index 0, its a que for server-methods. Call broadcast when > is at index 0
+                    # if > is not at index 0, its a que for server-methods. Call broadcast when > is at index 0
+                    if (message == "nicknames"):
+                        self.server_message("Nicknames requested", True)
+                        nicknames = self.list_connected_users()
+                        self.client.send(f"{nicknames}".encode(self.encoding)) # send encoded list of connected nicknames
+
                 else:
                     self.broadcast(f"{date} {message[1:]}") # broadcast message without the ">" symbol
+                    
             except:
                 self.broadcast(f"{nick_name} left the chat")
                 socket.close()

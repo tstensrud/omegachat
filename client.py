@@ -65,23 +65,23 @@ class Client:
         self.root.mainloop()
 
     # methods for GUI handling
-    def change_window_title(self, title) -> None:
+    def change_window_title(self, title: str) -> None:
         self.root.title(f"Omegachat - logged in as {title}")
     def frame_resizing(self, event) -> None:
         self.chat_frame.config(width=event.width)
-    def internal_message(self, message) -> None: # local messages to chat window from the app
+    def internal_message(self, message: str) -> None: # local messages to chat window from the app
         self.chat_window.insert(tk.END, f"{message}\n")
         self.chat_window.yview(tk.END)
     def update_alias_list(self) -> None:
         #nicknames = self.input_handling("nicknames", True) # que for server to send nickname-list
-        self.client_input_handling("Alias list", False)
+        self.client_input_handling("nicknames", False)
         
     def read_chat_message_entry(self, event): # read chat entry-field
         entry_field = self.chat_message.get()
         self.client_input_handling(entry_field, True)
     
     # chat command-shortcuts
-    def chat_commands(self, command) -> None:
+    def chat_commands(self, command: str) -> None:
         if command == "disconnect":
             self.disconnect()
         elif command == "nick":
@@ -92,7 +92,7 @@ class Client:
     # read input from chat_entry and handle it.
     # set broadcast True if message is for other chatters.
     # set broadcast False if its to call server or local client methods
-    def client_input_handling(self, message, broadcast) -> None:
+    def client_input_handling(self, message: str, broadcast: bool) -> None:
         if broadcast == True: # if regulare chat message
             # if input from chat-entry is a /-command
             if message[0] == "/":
@@ -107,9 +107,6 @@ class Client:
         if broadcast == False:
             self.broadcast_msg_to_server(message) # used for a request to server
 
-            
-    
-    
             
     # disconnect from server
     def disconnect(self) -> None:
@@ -181,7 +178,7 @@ class Client:
             print(f"Connection-error: {e}")
     
     # multi thread for receiving new messages from server
-    def new_messages_from_server_thread(self, running) -> None:
+    def new_messages_from_server_thread(self, running: bool) -> None:
         if running == True:
             self.stop_flag = True
             receive_message_from_server = threading.Thread(target=self.incomming_messages_from_server)
@@ -190,5 +187,5 @@ class Client:
             self.stop_flag = False
     
     # broadcast encoded message to server
-    def broadcast_msg_to_server(self, message) -> None:
+    def broadcast_msg_to_server(self, message: str) -> None:
         self.socket.send(message.encode(self.encoding))
