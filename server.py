@@ -2,6 +2,7 @@ import socket
 import sys
 import threading
 import datetime
+import time
 import tkinter as tk
 from server_client import ServerClient
 from tkinter import scrolledtext
@@ -95,7 +96,7 @@ class OmegachatServer:
                 self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
 
     # broadcast message to all connected users
-    def broadcast(self, message: str) -> None:
+    def broadcast_to_all(self, message: str) -> None:
         message_out = message.encode(self.encoding)
         for client in self.clients:
             try:
@@ -103,12 +104,6 @@ class OmegachatServer:
             except Exception as e:
                 self.server_message(e, True)
 
-    # return a list of all nicknames to display on client side
-    def get_connected_users(self) -> List[str]:
-        nicknames = []
-        for client in self.clients:
-            nicknames.append(client.get_nickname())
-        return nicknames
 
     def return_client_index(self, name: str) -> int:
         for i in range(len(self.clients)):
@@ -122,20 +117,12 @@ class OmegachatServer:
         nick_name = client.get_nickname()
         while self.server_running == True:
             try:
-                date = datetime.datetime.now().strftime("[%H:%M:%S]")
                 message = socket.recv(1024).decode(self.encoding)
-                if message[0] != ">":
-                    # if > is not at index 0, its a que for server-methods. Call broadcast when > is at index 0
-                    if (message == "nicknames"):
-                        self.server_message("Nicknames requested", True)
-                        nicknames = self.list_connected_users()
-                        self.client.send(f"{nicknames}".encode(self.encoding)) # send encoded list of connected nicknames
-
-                else:
-                    self.broadcast(f"{date} {message[1:]}") # broadcast message without the ">" symbol
+                self.broadcast_to_all(f"{self.date()} {message}")
                     
             except:
-                self.broadcast(f"{nick_name} left the chat")
+                self.broadcast_to_all(f"{nick_name} left the chat")
+                self.broadcast_to_all(f"remove{nick_name}")
                 socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
                 break
@@ -151,7 +138,9 @@ class OmegachatServer:
             else:
                 client = ServerClient(socket, ip, nickname)
                 self.clients.append(client)
-                self.broadcast(f"{client.get_nickname()} joined the chat.")
+                self.broadcast_to_all(f"{client.get_nickname()} joined the chat.")
+                self.broadcast_to_all(f"add{client.get_nickname()}")
+                time.sleep(1)
                 socket.send("Connected to the server".encode(self.encoding))
                 thread = threading.Thread(target=self.handle, args=(client,))
                 thread.daemon = True

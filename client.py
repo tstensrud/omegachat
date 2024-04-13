@@ -52,6 +52,7 @@ class Client:
         self.chat_window = scrolledtext.ScrolledText(self.chat_frame, wrap=tk.WORD, bg=self.bg_color, fg=self.text_color)  
 
         self.alias_list = tk.Listbox(self.client_frame, width=25, bg=self.client_frame_bg)
+        self.alias_list.config(activestyle="none")
 
         self.menu_bar = tk.Menu(self.root)
         self.options_menu = tk.Menu(self.menu_bar, tearoff=0)
@@ -72,13 +73,19 @@ class Client:
     def internal_message(self, message: str) -> None: # local messages to chat window from the app
         self.chat_window.insert(tk.END, f"{message}\n")
         self.chat_window.yview(tk.END)
-    def update_alias_list(self) -> None:
-        #nicknames = self.input_handling("nicknames", True) # que for server to send nickname-list
-        self.client_input_handling("nicknames", False)
+    def update_alias_list(self, nick: str, add: bool) -> None:
+        if add == True:
+            self.alias_list.insert(tk.END, nick)
+        elif add == False:
+            list_of_names = self.alias_list.get(0, tk.END)
+            for i in range(len(list_of_names)):
+                if list_of_names[i] == nick:
+                    self.alias_list.delete(i)
+                    break
         
     def read_chat_message_entry(self, event): # read chat entry-field
         entry_field = self.chat_message.get()
-        self.client_input_handling(entry_field, True)
+        self.client_input_handling(entry_field, False)
     
     # chat command-shortcuts
     def chat_commands(self, command: str) -> None:
@@ -92,21 +99,18 @@ class Client:
     # read input from chat_entry and handle it.
     # set broadcast True if message is for other chatters.
     # set broadcast False if its to call server or local client methods
-    def client_input_handling(self, message: str, broadcast: bool) -> None:
-        if broadcast == True: # if regulare chat message
-            # if input from chat-entry is a /-command
+    def client_input_handling(self, message: str, server_request: bool) -> None:
+        if server_request == False:
             if message[0] == "/":
                 self.chat_commands(message[1:])
                 self.chat_message.delete(0, tk.END)
                 self.chat_window.yview(tk.END)
             else:
-                # ">" is added to seperate regular chat messages from server-calls on server side.
-                self.broadcast_msg_to_server(f">{self.nickname}: {message}")
+                self.broadcast_msg_to_server(f"{self.nickname}: {message}")
                 self.chat_message.delete(0, tk.END)
                 self.chat_window.yview(tk.END)
-        if broadcast == False:
-            self.broadcast_msg_to_server(message) # used for a request to server
-
+        else:
+            self.broadcast_msg_to_server(message) # used to call methods on server
             
     # disconnect from server
     def disconnect(self) -> None:
@@ -125,12 +129,17 @@ class Client:
             sys.exit(1)
 
     # receive new messages from server and write them to chat window
-    def incomming_messages_from_server(self) -> None:
+    def incoming_messages_from_server(self) -> None:
         while self.stop_flag == True:
             try:
-                message=self.socket.recv(1024).decode(self.encoding)
-                self.chat_window.insert(tk.END, f"{message}\n")
-                self.chat_window.yview(tk.END)
+                message = self.socket.recv(1024).decode(self.encoding)
+                if message[0:3] == "add":
+                    self.update_alias_list(message[3:], True)
+                elif message[0:6] == "remove":
+                    self.update_alias_list(message[6:], False)
+                else:
+                    self.chat_window.insert(tk.END, f"{message}\n")
+                    self.chat_window.yview(tk.END)
             except Exception as e:
                 print(f"Disconnected: {e} \n")
                 self.socket.close()
@@ -152,7 +161,7 @@ class Client:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
             self.internal_message(f"Connecting to: {HOST}:{PORT}")
-            self.socket.send(f"{nick}".encode(self.encoding), True) # send nick to server
+            self.socket.send(f"{nick}".encode(self.encoding)) # send nick to server
             nick_response = self.socket.recv(1024).decode(self.encoding) # receives response on nick. will be "err-1" if nick is taken
             
             if nick_response == "Err-1":
@@ -160,6 +169,7 @@ class Client:
                 self.socket.close()
                 return
             else:
+                self.new_messages_from_server_thread(True)
                 self.nickname = nick
                 # forget login-frame and pack the chat-frames
                 self.start_frame.forget()
@@ -168,10 +178,8 @@ class Client:
                 self.chat_message.pack(fill="x", side="bottom")
                 self.chat_window.pack(side="top", fill="both", expand=True)
                 self.alias_list.pack(fill="both", expand=True)
-
-                self.internal_message(nick_response)
                 self.change_window_title(self.nickname)
-                self.new_messages_from_server_thread(True)
+                self.internal_message(nick_response)
 
                 print("Nick accepted")
         except Exception as e:
@@ -181,7 +189,7 @@ class Client:
     def new_messages_from_server_thread(self, running: bool) -> None:
         if running == True:
             self.stop_flag = True
-            receive_message_from_server = threading.Thread(target=self.incomming_messages_from_server)
+            receive_message_from_server = threading.Thread(target=self.incoming_messages_from_server)
             receive_message_from_server.start()
         if running == False:
             self.stop_flag = False
