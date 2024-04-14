@@ -14,5 +14,5 @@ class ServerClient:
     def get_socket(self):
         return self.socket
     
-    def set_nickname(self,new_nick):
+    def set_nickname(self,new_nick) -> None:
         self.nickname = new_nick

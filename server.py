@@ -9,7 +9,8 @@ from server_client import ServerClient
 from tkinter import scrolledtext
 from tkinter import messagebox
 from typing import List
-
+from messages import Message
+from channels import Channel
 
 class OmegachatServer:
     def __init__(self):
@@ -19,6 +20,7 @@ class OmegachatServer:
         self.server = None
         self.clients = [] # list of client objects
         self.server_running = False
+        self.main_channel = Channel("main", "Welcome to the main-channel!")
 
         self.root = tk.Tk()
         self.root.title("Omegachat - SERVER")
@@ -51,7 +53,7 @@ class OmegachatServer:
         self.main_frame.config(width=event.width)
     
     def date(self) -> str:
-        return datetime.datetime.now().strftime("[%H:%M:%S]")
+        return datetime.datetime.now().strftime("%H:%M:%S")
 
     # messages the server writes to its own output
     def server_message(self, message: str, date: bool) -> None:
@@ -110,6 +112,7 @@ class OmegachatServer:
 
 
     # broadcast message to all connected users
+    # message is an object of Message
     def broadcast(self, message) -> None:
         message_out = pickle.dumps(message)
         for client in self.clients:
@@ -132,14 +135,13 @@ class OmegachatServer:
         while self.server_running == True:
             try:
                 message = pickle.loads(client_socket.recv(self.buffer_size))
-                if message[0:3] == "msg":
-                    self.broadcast(f"msg{self.date()} {message[3:]}")
-                elif message[0:3] == "nck":
-                    self.broadcast(f"nck{self.get_nicknames_list()}")
-
+                if message.id == "msg":
+                    self.broadcast(message)
             except:
-                self.broadcast(f"msg<{nick_name}> left the chat")
-                self.broadcast(f"rmv{nick_name}")
+                quit_msg = Message("msg", self.date(), nick_name, "has left the left")
+                self.broadcast(quit_msg)
+                remove_from_clients = Message("remove_nick", None, nick_name, None)
+                self.broadcast(remove_from_clients)
                 client_socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
                 break
@@ -149,16 +151,20 @@ class OmegachatServer:
         while self.server_running == True:
             client_socket, ip = self.server.accept()
             nickname = pickle.loads(client_socket.recv(self.buffer_size))
-            self.server_message(f"{nickname} connected {str(ip)}", True)
             if self.find_nick_name(nickname):
                 error_msg = pickle.dumps("Err-1")
                 client_socket.send(error_msg)
             else:
+                self.server_message(f"{nickname} connected {str(ip)}", True)
                 client = ServerClient(client_socket, ip, nickname)
                 self.clients.append(client)
-                self.broadcast(f"msg<{client.get_nickname()}> joined the chat.")
+                nickname = client.get_nickname()
+                welcome_msg = Message("msg", self.date(), nickname, f"has joined the chat.")
+                self.broadcast(welcome_msg)
+                self.main_channel.active_users.append(nickname)
+                add_to_other_clients = Message("add_nick", None, nickname, None)
+                self.broadcast(add_to_other_clients)
                 time.sleep(1)
-                client_socket.send(pickle.dumps("Connected to the server"))
                 thread = threading.Thread(target=self.handle, args=(client,))
                 thread.daemon = True
                 thread.start()

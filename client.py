@@ -5,8 +5,10 @@ import time
 import tkinter as tk
 import sys
 import threading
+import datetime
 from tkinter import messagebox
 from tkinter import scrolledtext
+from messages import Message
 
 class Client:
     def __init__(self):
@@ -75,26 +77,19 @@ class Client:
     def internal_message(self, message: str) -> None: # local messages to chat window from the app
         self.chat_window.insert(tk.END, f"{message}\n")
         self.chat_window.yview(tk.END)
-    def update_alias_list(self, input_string, add: bool) -> None:
+    def update_alias_list(self, input_string: str, add: bool) -> None:
         if add == True:
-            self.alias_list.delete(0, tk.END)
-            evaluate = ast.literal_eval(input_string)
-            updated_nicknames = []
-            for nickname in evaluate:
-                updated_nicknames.append(nickname)
-            updated_nicknames.sort()
-            for nickname in updated_nicknames:
-                self.alias_list.insert(tk.END, nickname)
+            self.alias_list.insert(tk.END, input_string)
         elif add == False:
             list_of_names = self.alias_list.get(0, tk.END)
             for i in range(len(list_of_names)):
                 if list_of_names[i] == input_string:
                     self.alias_list.delete(i)
                     break
-        
+
     def read_chat_message_entry(self, event): # read chat entry-field
         entry_field = self.chat_message.get()
-        self.client_input_handling(entry_field, False)
+        self.client_input_handling(entry_field)
     
     # chat command-shortcuts
     def chat_commands(self, command: str) -> None:
@@ -108,18 +103,16 @@ class Client:
     # read input from chat_entry and handle it.
     # set broadcast True if message is for other chatters.
     # set broadcast False if its to call server or local client methods
-    def client_input_handling(self, message: str, server_request: bool) -> None:
-        if server_request == False:
-            if message[0] == "/":
-                self.chat_commands(message[1:])
-                self.chat_message.delete(0, tk.END)
-                self.chat_window.yview(tk.END)
-            else:
-                self.broadcast_msg_to_server(f"msg<{self.nickname}> {message}")
-                self.chat_message.delete(0, tk.END)
-                self.chat_window.yview(tk.END)
+    def client_input_handling(self, message: str) -> None:
+        if message[0] == "/":
+            self.chat_commands(message[1:])
+            self.chat_message.delete(0, tk.END)
+            self.chat_window.yview(tk.END)
         else:
-            self.broadcast_msg_to_server(message) # used to call methods on server
+            self.broadcast_msg_to_server(message)
+            self.chat_message.delete(0, tk.END)
+            self.chat_window.yview(tk.END)
+
             
     # disconnect from server
     def disconnect(self) -> None:
@@ -152,13 +145,13 @@ class Client:
         while self.stop_flag == True:
             try:
                 message = pickle.loads(self.socket.recv(self.buffer_size))
-                if message[0:3] == "rmv":
-                    self.update_alias_list(message[3:], False)
-                elif message[0:3] == "msg":
-                    self.chat_window.insert(tk.END, f"{message[3:]}\n")
+                if message.id == "msg":
+                    self.chat_window.insert(tk.END, f"[{message.date}] <{message.owner}> {message.message}\n")
                     self.chat_window.yview(tk.END)
-                elif message[0:3] == "nck":
-                    self.update_alias_list(message[3:], True)
+                elif message.id == "add_nick":
+                    self.update_alias_list(message.owner, True)
+                elif message.id == "remove_nick":
+                    self.update_alias_list(message.owner, False)
             except Exception as e:
                 print(f"Client disconnected: {e} \n")
                 self.socket.close()
@@ -199,10 +192,6 @@ class Client:
                 self.alias_list.pack(fill="both", expand=True)
                 self.change_window_title(self.nickname)
                 time.sleep(1)
-                self.internal_message(nick_response)
-                self.broadcast_msg_to_server("nck")
-
-                print("Nick accepted")
         except Exception as e:
             print(f"Connection-error: {e}")
     
@@ -217,4 +206,6 @@ class Client:
     
     # broadcast encoded message to server
     def broadcast_msg_to_server(self, message: str) -> None:
-        self.socket.send(pickle.dumps(message))
+        date = datetime.datetime.now().strftime("%H:%M:%S")
+        new_message = Message("msg", date, self.nickname, message)
+        self.socket.send(pickle.dumps(new_message))
