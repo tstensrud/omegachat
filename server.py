@@ -7,6 +7,7 @@ import time
 import tkinter as tk
 from server_client import ServerClient
 from tkinter import scrolledtext
+from tkinter import messagebox
 from typing import List
 
 
@@ -14,8 +15,8 @@ class OmegachatServer:
     def __init__(self):
         self.HOST = "127.0.0.1"
         self.PORT = 55555
+        self.buffer_size = 2048
         self.server = None
-        self.encoding = "utf-8"
         self.clients = [] # list of client objects
         self.server_running = False
 
@@ -42,6 +43,7 @@ class OmegachatServer:
         self.menu_bar.add_cascade(label="User options", menu=self.users_menu)
         
         self.root.config(menu=self.menu_bar)
+        self.root.protocol("WM_DELETE_WINDOW", self.exit)
         self.root.mainloop()
         
 
@@ -77,8 +79,10 @@ class OmegachatServer:
 
     # exit server-program
     def exit(self) -> None:
-        self.stop_server()
-        sys.exit()
+        if tk.messagebox.askokcancel("Quit", "Are you sure you want to quit?"):
+            self.stop_server()
+            self.root.destroy()
+            sys.exit()
 
     # find nickname. return True if found
     def find_nick_name(self, name: str) -> bool:
@@ -96,24 +100,23 @@ class OmegachatServer:
             for client in self.clients:
                 self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
 
+    # find all nicknames from clients-list and return them as a sorted list
+    def get_nicknames_list(self) -> List[str]:
+        nicknames = []
+        for client in self.clients:
+            nicknames.append(client.get_nickname())
+        nicknames.sort()
+        return nicknames
+
+
     # broadcast message to all connected users
-    def broadcast_to_all(self, message: str, client) -> None:
-        message_out = message.encode(self.encoding)
-        if client == None:
-            for get_client in self.clients:
-                try:
-                    get_client.get_socket().send(message_out)
-                except Exception as e:
-                    self.server_message(f"Error: {e}", True)
-        elif client != None:
-            for get_client in self.clients:
-                if get_client == client:
-                    continue
-                else:
-                    try:
-                        get_client.get_socket().send(message_out)
-                    except Exception as e:
-                        self.server_message(f"Error: {e}", True)
+    def broadcast(self, message) -> None:
+        message_out = pickle.dumps(message)
+        for client in self.clients:
+            try:
+                client.get_socket().send(message_out)
+            except Exception as e:
+                self.server_message(f"Error: {e}", True)
 
 
     def return_client_index(self, name: str) -> int:
@@ -128,15 +131,15 @@ class OmegachatServer:
         nick_name = client.get_nickname()
         while self.server_running == True:
             try:
-                message = client_socket.recv(1024).decode(self.encoding)
-                if message[0:3] == "add":
-                    pass
-                else:
-                    self.broadcast_to_all(f"{self.date()} {message}", None)
-                    
+                message = pickle.loads(client_socket.recv(self.buffer_size))
+                if message[0:3] == "msg":
+                    self.broadcast(f"msg{self.date()} {message[3:]}")
+                elif message[0:3] == "nck":
+                    self.broadcast(f"nck{self.get_nicknames_list()}")
+
             except:
-                self.broadcast_to_all(f"<{nick_name}> left the chat", None)
-                self.broadcast_to_all(f"remove{nick_name}", None)
+                self.broadcast(f"msg<{nick_name}> left the chat")
+                self.broadcast(f"rmv{nick_name}")
                 client_socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
                 break
@@ -145,18 +148,17 @@ class OmegachatServer:
     def client_connection(self) -> None:
         while self.server_running == True:
             client_socket, ip = self.server.accept()
-            nickname = client_socket.recv(1024).decode(self.encoding)
+            nickname = pickle.loads(client_socket.recv(self.buffer_size))
             self.server_message(f"{nickname} connected {str(ip)}", True)
             if self.find_nick_name(nickname):
-                client_socket.send("Err-1".encode(self.encoding))
+                error_msg = pickle.dumps("Err-1")
+                client_socket.send(error_msg)
             else:
                 client = ServerClient(client_socket, ip, nickname)
                 self.clients.append(client)
-                self.broadcast_to_all(f"<{client.get_nickname()}> joined the chat.", None)
-                self.broadcast_to_all(f"add{client.get_nickname()}", None)
-                #print(self.nickname_list)
+                self.broadcast(f"msg<{client.get_nickname()}> joined the chat.")
                 time.sleep(1)
-                client_socket.send("Connected to the server".encode(self.encoding))
+                client_socket.send(pickle.dumps("Connected to the server"))
                 thread = threading.Thread(target=self.handle, args=(client,))
                 thread.daemon = True
                 thread.start()

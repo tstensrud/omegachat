@@ -1,3 +1,4 @@
+import ast
 import pickle
 import socket
 import time
@@ -10,9 +11,8 @@ from tkinter import scrolledtext
 class Client:
     def __init__(self):
         self.nickname: str = ""
-        self.encoding = "utf-8"
+        self.buffer_size = 2048
         self.socket = None
-        self.connected_users = [] 
 
         # flag for the receive msg thread
         self.stop_flag = False
@@ -64,6 +64,7 @@ class Client:
         self.menu_bar.add_cascade(label="Options", menu=self.options_menu)
         
         self.root.config(menu=self.menu_bar)
+        self.root.protocol("WM_DELETE_WINDOW", self.exit)
         self.root.mainloop()
 
     # methods for GUI handling
@@ -74,13 +75,20 @@ class Client:
     def internal_message(self, message: str) -> None: # local messages to chat window from the app
         self.chat_window.insert(tk.END, f"{message}\n")
         self.chat_window.yview(tk.END)
-    def update_alias_list(self, nick, add: bool) -> None:
+    def update_alias_list(self, input_string, add: bool) -> None:
         if add == True:
-            self.alias_list.insert(tk.END, nick)
+            self.alias_list.delete(0, tk.END)
+            evaluate = ast.literal_eval(input_string)
+            updated_nicknames = []
+            for nickname in evaluate:
+                updated_nicknames.append(nickname)
+            updated_nicknames.sort()
+            for nickname in updated_nicknames:
+                self.alias_list.insert(tk.END, nickname)
         elif add == False:
             list_of_names = self.alias_list.get(0, tk.END)
             for i in range(len(list_of_names)):
-                if list_of_names[i] == nick:
+                if list_of_names[i] == input_string:
                     self.alias_list.delete(i)
                     break
         
@@ -107,7 +115,7 @@ class Client:
                 self.chat_message.delete(0, tk.END)
                 self.chat_window.yview(tk.END)
             else:
-                self.broadcast_msg_to_server(f"<{self.nickname}> {message}")
+                self.broadcast_msg_to_server(f"msg<{self.nickname}> {message}")
                 self.chat_message.delete(0, tk.END)
                 self.chat_window.yview(tk.END)
         else:
@@ -115,36 +123,46 @@ class Client:
             
     # disconnect from server
     def disconnect(self) -> None:
-        self.new_messages_from_server_thread(False)
-        self.socket.close()
-        time.sleep(1)
-        self.chat_window.insert(tk.END, "Disconnected.")
+        if self.stop_flag == True:
+            self.new_messages_from_server_thread(False)
+            self.socket.close()
+            time.sleep(1)
+        self.chat_frame.forget()
+        self.client_frame.forget()
+        self.chat_message.forget()
+        self.chat_window.forget()
+        self.alias_list.forget()
+        self.change_window_title("Not connected")
+        self.start_frame.pack(fill="both", expand=True)
 
     def exit(self) -> None:
-        try:
-            self.disconnect()
-            sys.exit()
-        except Exception as e:
-            print(e)
-            self.disconnect()
-            sys.exit(1)
+        if tk.messagebox.askokcancel("Quit", "Are you sure you want to quit?"):
+            try:
+                self.disconnect()
+                self.root.destroy()
+                sys.exit()
+            except Exception as e:
+                print(e)
+                self.disconnect()
+                self.root.destroy()
+                sys.exit(1)
 
     # receive new messages from server and write them to chat window
     def incoming_messages_from_server(self) -> None:
         while self.stop_flag == True:
             try:
-                message = self.socket.recv(1024).decode(self.encoding)
-                if message[0:3] == "add":
-                    self.update_alias_list(message[3:], True)
-                elif message[0:6] == "remove":
-                    self.update_alias_list(message[6:], False)
-                else:
-                    self.chat_window.insert(tk.END, f"{message}\n")
+                message = pickle.loads(self.socket.recv(self.buffer_size))
+                if message[0:3] == "rmv":
+                    self.update_alias_list(message[3:], False)
+                elif message[0:3] == "msg":
+                    self.chat_window.insert(tk.END, f"{message[3:]}\n")
                     self.chat_window.yview(tk.END)
+                elif message[0:3] == "nck":
+                    self.update_alias_list(message[3:], True)
             except Exception as e:
-                print(f"Disconnected: {e} \n")
+                print(f"Client disconnected: {e} \n")
                 self.socket.close()
-                break 
+                break
 
     # logging in and establishing connection to the server through a web socket.
     # if chosen nickname is already taken it closes the socket and returns
@@ -162,8 +180,8 @@ class Client:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
             self.internal_message(f"Connecting to: {HOST}:{PORT}")
-            self.socket.send(f"{nick}".encode(self.encoding)) # send nick to server
-            nick_response = self.socket.recv(1024).decode(self.encoding) # receives response on nick. will be "err-1" if nick is taken
+            self.socket.send(pickle.dumps(f"{nick}")) # send nick to server
+            nick_response = pickle.loads(self.socket.recv(self.buffer_size)) # receives response on nick. will be "err-1" if nick is taken
             
             if nick_response == "Err-1":
                 messagebox.showerror("Error", "Name is already taken")
@@ -182,6 +200,7 @@ class Client:
                 self.change_window_title(self.nickname)
                 time.sleep(1)
                 self.internal_message(nick_response)
+                self.broadcast_msg_to_server("nck")
 
                 print("Nick accepted")
         except Exception as e:
@@ -198,4 +217,4 @@ class Client:
     
     # broadcast encoded message to server
     def broadcast_msg_to_server(self, message: str) -> None:
-        self.socket.send(message.encode(self.encoding))
+        self.socket.send(pickle.dumps(message))

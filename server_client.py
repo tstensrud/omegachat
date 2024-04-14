@@ -1,3 +1,4 @@
+import threading
 class ServerClient:
     def __init__(self, socket, ip, nickname):
         self.socket = socket
