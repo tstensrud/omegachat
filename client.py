@@ -1,3 +1,4 @@
+import pickle
 import socket
 import time
 import tkinter as tk
@@ -59,7 +60,7 @@ class Client:
         self.options_menu.add_command(label="Connect")
         self.options_menu.add_command(label="Disonnect", command=self.disconnect)
         self.options_menu.add_command(label="Exit", command=self.exit)
-        self.options_menu.add_command(label="Test", command=self.update_alias_list)
+        self.options_menu.add_command(label="Test")
         self.menu_bar.add_cascade(label="Options", menu=self.options_menu)
         
         self.root.config(menu=self.menu_bar)
@@ -73,7 +74,7 @@ class Client:
     def internal_message(self, message: str) -> None: # local messages to chat window from the app
         self.chat_window.insert(tk.END, f"{message}\n")
         self.chat_window.yview(tk.END)
-    def update_alias_list(self, nick: str, add: bool) -> None:
+    def update_alias_list(self, nick, add: bool) -> None:
         if add == True:
             self.alias_list.insert(tk.END, nick)
         elif add == False:
@@ -106,7 +107,7 @@ class Client:
                 self.chat_message.delete(0, tk.END)
                 self.chat_window.yview(tk.END)
             else:
-                self.broadcast_msg_to_server(f"{self.nickname}: {message}")
+                self.broadcast_msg_to_server(f"<{self.nickname}> {message}")
                 self.chat_message.delete(0, tk.END)
                 self.chat_window.yview(tk.END)
         else:
@@ -151,7 +152,7 @@ class Client:
         nick = self.nick_entry.get()
         HOST = self.host_entry.get()
 
-        try: # controll that port-number is numbers only
+        try: # control that port-number is numbers only
             PORT = int(self.port_entry.get())
         except ValueError:
             messagebox.showerror("Error", "Port can only be digits")
@@ -179,6 +180,7 @@ class Client:
                 self.chat_window.pack(side="top", fill="both", expand=True)
                 self.alias_list.pack(fill="both", expand=True)
                 self.change_window_title(self.nickname)
+                time.sleep(1)
                 self.internal_message(nick_response)
 
                 print("Nick accepted")

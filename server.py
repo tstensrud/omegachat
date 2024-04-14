@@ -1,3 +1,4 @@
+import pickle
 import socket
 import sys
 import threading
@@ -48,7 +49,7 @@ class OmegachatServer:
         self.main_frame.config(width=event.width)
     
     def date(self) -> str:
-        return datetime.datetime.now().strftime("[%Y-%M-%d %H:%M:%S]")
+        return datetime.datetime.now().strftime("[%H:%M:%S]")
 
     # messages the server writes to its own output
     def server_message(self, message: str, date: bool) -> None:
@@ -96,13 +97,23 @@ class OmegachatServer:
                 self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
 
     # broadcast message to all connected users
-    def broadcast_to_all(self, message: str) -> None:
+    def broadcast_to_all(self, message: str, client) -> None:
         message_out = message.encode(self.encoding)
-        for client in self.clients:
-            try:
-                client.get_socket().send(message_out)
-            except Exception as e:
-                self.server_message(e, True)
+        if client == None:
+            for get_client in self.clients:
+                try:
+                    get_client.get_socket().send(message_out)
+                except Exception as e:
+                    self.server_message(f"Error: {e}", True)
+        elif client != None:
+            for get_client in self.clients:
+                if get_client == client:
+                    continue
+                else:
+                    try:
+                        get_client.get_socket().send(message_out)
+                    except Exception as e:
+                        self.server_message(f"Error: {e}", True)
 
 
     def return_client_index(self, name: str) -> int:
@@ -113,35 +124,39 @@ class OmegachatServer:
 
     # handle incoming messages from a client and call necessary methods based on input
     def handle(self, client) -> None:
-        socket = client.get_socket()
+        client_socket = client.get_socket()
         nick_name = client.get_nickname()
         while self.server_running == True:
             try:
-                message = socket.recv(1024).decode(self.encoding)
-                self.broadcast_to_all(f"{self.date()} {message}")
+                message = client_socket.recv(1024).decode(self.encoding)
+                if message[0:3] == "add":
+                    pass
+                else:
+                    self.broadcast_to_all(f"{self.date()} {message}", None)
                     
             except:
-                self.broadcast_to_all(f"{nick_name} left the chat")
-                self.broadcast_to_all(f"remove{nick_name}")
-                socket.close()
+                self.broadcast_to_all(f"<{nick_name}> left the chat", None)
+                self.broadcast_to_all(f"remove{nick_name}", None)
+                client_socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
                 break
     
     # handle incoming connections and starting handle() for each incoming client
     def client_connection(self) -> None:
         while self.server_running == True:
-            socket, ip = self.server.accept()
-            nickname = socket.recv(1024).decode(self.encoding)
+            client_socket, ip = self.server.accept()
+            nickname = client_socket.recv(1024).decode(self.encoding)
             self.server_message(f"{nickname} connected {str(ip)}", True)
             if self.find_nick_name(nickname):
-                socket.send("Err-1".encode(self.encoding))
+                client_socket.send("Err-1".encode(self.encoding))
             else:
-                client = ServerClient(socket, ip, nickname)
+                client = ServerClient(client_socket, ip, nickname)
                 self.clients.append(client)
-                self.broadcast_to_all(f"{client.get_nickname()} joined the chat.")
-                self.broadcast_to_all(f"add{client.get_nickname()}")
+                self.broadcast_to_all(f"<{client.get_nickname()}> joined the chat.", None)
+                self.broadcast_to_all(f"add{client.get_nickname()}", None)
+                #print(self.nickname_list)
                 time.sleep(1)
-                socket.send("Connected to the server".encode(self.encoding))
+                client_socket.send("Connected to the server".encode(self.encoding))
                 thread = threading.Thread(target=self.handle, args=(client,))
                 thread.daemon = True
                 thread.start()
