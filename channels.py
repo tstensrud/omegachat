@@ -3,7 +3,7 @@ class Channel:
     def __init__(self, name: str, motd: str):
         self.name = name
         self.motd = motd
-        self.active_users = UserList() # each channel has own UserList() object
+        self.active_users = UserList(name) # each channel has own UserList() object
         self.operators = []
 
     def get_name(self) -> str:
@@ -24,9 +24,10 @@ class Channel:
         return self.active_users
 
 class UserList:
-    def __init__(self):
+    def __init__(self, channel_name: str):
         self.users = []
         self.count = 0
+        self.name = channel_name
 
     def update_user_count(self) -> None:
         self.count = len(self.users)

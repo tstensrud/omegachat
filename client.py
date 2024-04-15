@@ -8,13 +8,14 @@ import threading
 import datetime
 from tkinter import messagebox
 from tkinter import scrolledtext
+from tkinter import ttk
 from messages import Message
 
 class Client:
     def __init__(self):
         self.nickname: str = ""
-        self.buffer_size = 2048
         self.socket = None
+        self.buffer_size = 2048
 
         # flag for the receive msg thread
         self.stop_flag = False
@@ -30,6 +31,7 @@ class Client:
         self.root.config(background=self.bg_color)
         self.root.geometry(self.window_size)
 
+        # log-in frame
         self.start_frame = tk.Frame(self.root, bg=self.bg_color)
         self.start_frame.pack(fill="both", expand=True)
         self.nick_entry = tk.Entry(self.start_frame, width=50)
@@ -44,26 +46,32 @@ class Client:
         self.login_button = tk.Button(self.start_frame, text="Login", width=10, height=1, command=self.login_gui)
         self.login_button.pack(anchor="center", pady=10)
 
+
         self.chat_frame = tk.Frame(self.root)
-        self.chat_frame.bind=("<Configure>", self.frame_resizing)
+        self.chat_frame.bind = ("<Configure>", self.frame_resizing)
 
         self.client_frame = tk.Frame(bg=self.bg_color, width=200)
 
         self.chat_message = tk.Entry(self.chat_frame, bg=self.client_frame_bg, fg="white")
         self.chat_message.bind('<Return>', self.read_chat_message_entry)
 
-        self.chat_window = scrolledtext.ScrolledText(self.chat_frame, wrap=tk.WORD, bg=self.bg_color, fg=self.text_color)  
+        self.chat_window = scrolledtext.ScrolledText(self.chat_frame, wrap=tk.WORD, bg=self.bg_color, fg=self.text_color)
         self.chat_window.config(state="disabled")
         self.alias_list = tk.Listbox(self.client_frame, width=25, bg=self.client_frame_bg)
         self.alias_list.config(activestyle="none")
 
+        # menu
         self.menu_bar = tk.Menu(self.root)
         self.options_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.options_menu.add_command(label="Connect")
-        self.options_menu.add_command(label="Disonnect", command=self.disconnect)
+        self.options_menu.add_command(label="Disconnect", command=self.disconnect)
+        self.options_menu.add_separator()
         self.options_menu.add_command(label="Exit", command=self.exit)
-        self.options_menu.add_command(label="Test")
         self.menu_bar.add_cascade(label="Options", menu=self.options_menu)
+        self.channel_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.channel_menu.add_command(label="Not connected")
+        self.menu_bar.add_cascade(label="Channels", menu=self.channel_menu)
+
         
         self.root.config(menu=self.menu_bar)
         self.root.protocol("WM_DELETE_WINDOW", self.exit)
@@ -81,10 +89,15 @@ class Client:
         self.chat_window.yview(tk.END)
     def update_alias_list(self, input_string) -> None:
         self.alias_list.delete(0, tk.END)
-        new_alias_list = input_string.get_users()
+        new_alias_list = input_string
         for new_alias in new_alias_list:
             self.alias_list.insert(tk.END, new_alias)
-
+    def channels_menu(self, new_channel: str, first_connect: bool) -> None:
+        if first_connect == True:
+            self.channel_menu.delete(0)
+            self.channel_menu.add_command(label=new_channel)
+        else:
+            self.channel_menu.add_command(label=new_channel)
     def read_chat_message_entry(self, event): # read chat entry-field
         entry_field = self.chat_message.get()
         self.client_input_handling(entry_field)
@@ -189,6 +202,7 @@ class Client:
                 self.chat_window.pack(side="top", fill="both", expand=True)
                 self.alias_list.pack(fill="both", expand=True)
                 self.change_window_title(self.nickname)
+                self.channels_menu("General", True)
                 time.sleep(1)
         except Exception as e:
             print(f"Connection-error: {e}")

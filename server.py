@@ -10,7 +10,6 @@ from tkinter import scrolledtext
 from tkinter import messagebox
 from typing import List
 from messages import Message
-from channels import UserList
 from channels import Channel
 
 class OmegachatServer:
@@ -21,8 +20,7 @@ class OmegachatServer:
         self.server = None
         self.clients = [] # list of client objects
         self.server_running = False
-        self.user_list = UserList()
-        #self.main_channel = Channel("main", "Welcome to the main-channel!")
+        self.main_channel = Channel("General", "Welcome to the main-channel!")
 
         self.root = tk.Tk()
         self.root.title("Omegachat - SERVER")
@@ -142,8 +140,8 @@ class OmegachatServer:
             except:
                 quit_msg = Message("msg", self.date(), nick_name, "has left the left")
                 self.broadcast(quit_msg)
-                self.user_list.remove_user(nick_name)
-                remove_from_clients = Message("uptusr", None, None, self.user_list)
+                self.main_channel.active_users.remove_user(nick_name)
+                remove_from_clients = Message("uptusr", None, None, self.main_channel.active_users.get_users())
                 self.broadcast(remove_from_clients)
                 client_socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
@@ -165,8 +163,8 @@ class OmegachatServer:
                 welcome_msg = Message("msg", self.date(), nickname, f"has joined the chat.")
                 self.broadcast(welcome_msg)
                 #self.main_channel.active_users.users.append(nickname)
-                self.user_list.add_user(nickname)
-                add_to_other_clients = Message("uptusr", None, None, self.user_list)
+                self.main_channel.active_users.add_user(nickname)
+                add_to_other_clients = Message("uptusr", None, None, self.main_channel.active_users.get_users())
                 self.broadcast(add_to_other_clients)
                 time.sleep(1)
                 thread = threading.Thread(target=self.handle, args=(client,))
