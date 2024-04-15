@@ -53,7 +53,7 @@ class Client:
         self.chat_message.bind('<Return>', self.read_chat_message_entry)
 
         self.chat_window = scrolledtext.ScrolledText(self.chat_frame, wrap=tk.WORD, bg=self.bg_color, fg=self.text_color)  
-
+        self.chat_window.config(state="disabled")
         self.alias_list = tk.Listbox(self.client_frame, width=25, bg=self.client_frame_bg)
         self.alias_list.config(activestyle="none")
 
@@ -75,17 +75,15 @@ class Client:
     def frame_resizing(self, event) -> None:
         self.chat_frame.config(width=event.width)
     def internal_message(self, message: str) -> None: # local messages to chat window from the app
+        self.chat_window.config(state="normal")
         self.chat_window.insert(tk.END, f"{message}\n")
+        self.chat_window.config(state="disabled")
         self.chat_window.yview(tk.END)
-    def update_alias_list(self, input_string: str, add: bool) -> None:
-        if add == True:
-            self.alias_list.insert(tk.END, input_string)
-        elif add == False:
-            list_of_names = self.alias_list.get(0, tk.END)
-            for i in range(len(list_of_names)):
-                if list_of_names[i] == input_string:
-                    self.alias_list.delete(i)
-                    break
+    def update_alias_list(self, input_string) -> None:
+        self.alias_list.delete(0, tk.END)
+        new_alias_list = input_string.get_users()
+        for new_alias in new_alias_list:
+            self.alias_list.insert(tk.END, new_alias)
 
     def read_chat_message_entry(self, event): # read chat entry-field
         entry_field = self.chat_message.get()
@@ -146,12 +144,12 @@ class Client:
             try:
                 message = pickle.loads(self.socket.recv(self.buffer_size))
                 if message.id == "msg":
+                    self.chat_window.config(state="normal")
                     self.chat_window.insert(tk.END, f"[{message.date}] <{message.owner}> {message.message}\n")
+                    self.chat_window.config(state="disabled")
                     self.chat_window.yview(tk.END)
-                elif message.id == "add_nick":
-                    self.update_alias_list(message.owner, True)
-                elif message.id == "remove_nick":
-                    self.update_alias_list(message.owner, False)
+                elif message.id == "uptusr":
+                    self.update_alias_list(message.message)
             except Exception as e:
                 print(f"Client disconnected: {e} \n")
                 self.socket.close()

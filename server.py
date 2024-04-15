@@ -10,6 +10,7 @@ from tkinter import scrolledtext
 from tkinter import messagebox
 from typing import List
 from messages import Message
+from channels import UserList
 from channels import Channel
 
 class OmegachatServer:
@@ -20,7 +21,8 @@ class OmegachatServer:
         self.server = None
         self.clients = [] # list of client objects
         self.server_running = False
-        self.main_channel = Channel("main", "Welcome to the main-channel!")
+        self.user_list = UserList()
+        #self.main_channel = Channel("main", "Welcome to the main-channel!")
 
         self.root = tk.Tk()
         self.root.title("Omegachat - SERVER")
@@ -140,7 +142,8 @@ class OmegachatServer:
             except:
                 quit_msg = Message("msg", self.date(), nick_name, "has left the left")
                 self.broadcast(quit_msg)
-                remove_from_clients = Message("remove_nick", None, nick_name, None)
+                self.user_list.remove_user(nick_name)
+                remove_from_clients = Message("uptusr", None, None, self.user_list)
                 self.broadcast(remove_from_clients)
                 client_socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
@@ -161,8 +164,9 @@ class OmegachatServer:
                 nickname = client.get_nickname()
                 welcome_msg = Message("msg", self.date(), nickname, f"has joined the chat.")
                 self.broadcast(welcome_msg)
-                self.main_channel.active_users.append(nickname)
-                add_to_other_clients = Message("add_nick", None, nickname, None)
+                #self.main_channel.active_users.users.append(nickname)
+                self.user_list.add_user(nickname)
+                add_to_other_clients = Message("uptusr", None, None, self.user_list)
                 self.broadcast(add_to_other_clients)
                 time.sleep(1)
                 thread = threading.Thread(target=self.handle, args=(client,))
