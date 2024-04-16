@@ -9,7 +9,7 @@ from server_client import ServerClient
 from tkinter import scrolledtext
 from tkinter import messagebox
 from typing import List
-from messages import Message
+from messages import Packet
 from channels import Channel
 
 class OmegachatServer:
@@ -20,7 +20,7 @@ class OmegachatServer:
         self.server = None
         self.clients = [] # list of client objects
         self.server_running = False
-        self.main_channel = Channel("General", "Welcome to the main-channel!")
+        self.channel_general = Channel("General", "Welcome to the main-channel!")
 
         self.root = tk.Tk()
         self.root.title("Omegachat - SERVER")
@@ -138,10 +138,10 @@ class OmegachatServer:
                 if message.id == "msg":
                     self.broadcast(message)
             except:
-                quit_msg = Message("msg", self.date(), nick_name, "has left the left")
+                quit_msg = Packet("msg", self.date(), nick_name, "has left the left", None)
                 self.broadcast(quit_msg)
-                self.main_channel.active_users.remove_user(nick_name)
-                remove_from_clients = Message("uptusr", None, None, self.main_channel.active_users.get_users())
+                self.channel_general.active_users.remove_user(nick_name)
+                remove_from_clients = Packet("uptusr", None, None, self.channel_general.active_users.get_users(), None)
                 self.broadcast(remove_from_clients)
                 client_socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
@@ -160,11 +160,11 @@ class OmegachatServer:
                 client = ServerClient(client_socket, ip, nickname)
                 self.clients.append(client)
                 nickname = client.get_nickname()
-                welcome_msg = Message("msg", self.date(), nickname, f"has joined the chat.")
+                welcome_msg = Packet("msg", self.date(), nickname, f"has joined the chat.", None)
                 self.broadcast(welcome_msg)
                 #self.main_channel.active_users.users.append(nickname)
-                self.main_channel.active_users.add_user(nickname)
-                add_to_other_clients = Message("uptusr", None, None, self.main_channel.active_users.get_users())
+                self.channel_general.active_users.add_user(nickname)
+                add_to_other_clients = Packet("uptusr", None, None, self.channel_general.active_users.get_users(), None)
                 self.broadcast(add_to_other_clients)
                 time.sleep(1)
                 thread = threading.Thread(target=self.handle, args=(client,))
