@@ -9,6 +9,7 @@ import gui_settings as gs
 from tkinter import messagebox
 from tkinter import scrolledtext
 from messages import Packet
+from channels import Channel
 
 class Client:
     def __init__(self):
@@ -18,31 +19,33 @@ class Client:
 
         # flag for the receive msg thread
         self.stop_flag = False
+        self.channels = []
 
         # GUI colors and configs
         self.bg_color = gs.bg_color
         self.text_color = gs.text_color
         self.window_size = gs.window_size
         self.client_frame_bg = gs.client_frame_bg
-        
+
+        # root window
         self.root = tk.Tk()
         self.root.title("Omegachat")
         self.root.config(background=self.bg_color)
         self.root.geometry(self.window_size)
 
         # log-in frame
-        self.start_frame = tk.Frame(self.root, bg=self.bg_color)
-        self.start_frame.pack(fill="both", expand=True)
-        self.nick_entry = tk.Entry(self.start_frame, width=50)
+        self.login_frame = tk.Frame(self.root, bg=self.bg_color)
+        self.login_frame.pack(fill="both", expand=True)
+        self.nick_entry = tk.Entry(self.login_frame, width=50)
         self.nick_entry.pack(pady=10, padx=2)
         self.nick_entry.insert(0, "Username")
-        self.host_entry = tk.Entry(self.start_frame, width=50)
+        self.host_entry = tk.Entry(self.login_frame, width=50)
         self.host_entry.pack(pady=10, padx=2)
         self.host_entry.insert(0, "127.0.0.1")
-        self.port_entry = tk.Entry(self.start_frame, width=50)
+        self.port_entry = tk.Entry(self.login_frame, width=50)
         self.port_entry.pack(pady=10, padx=2)
         self.port_entry.insert(0, "55555")
-        self.login_button = tk.Button(self.start_frame, text="Login", width=10, height=1, command=self.login_gui)
+        self.login_button = tk.Button(self.login_frame, text="Login", width=10, height=1, command=self.login_gui)
         self.login_button.pack(anchor="center", pady=10)
 
         # status frame
@@ -52,23 +55,21 @@ class Client:
         self.status_entry = tk.Entry(self.status_frame, bg=self.client_frame_bg, fg="white")
         self.status_entry.bind('<Return>', self.read_chat_message_entry)
 
+        '''
         self.chat_frame = tk.Frame(self.root)
         self.chat_frame.bind = ("<Configure>", self.frame_resizing)
-
         self.client_frame = tk.Frame(bg=self.bg_color, width=200)
-
         self.chat_message = tk.Entry(self.chat_frame, bg=self.client_frame_bg, fg="white")
         self.chat_message.bind('<Return>', self.read_chat_message_entry)
-
         self.chat_window = scrolledtext.ScrolledText(self.chat_frame, wrap=tk.WORD, bg=self.bg_color, fg=self.text_color)
         self.chat_window.config(state="disabled")
         self.alias_list = tk.Listbox(self.client_frame, width=25, bg=self.client_frame_bg)
         self.alias_list.config(activestyle="none")
-
+        '''
         # menu
         self.menu_bar = tk.Menu(self.root)
         self.options_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.options_menu.add_command(label="Connect")
+        self.options_menu.add_command(label="Connect", command=lambda: self.view_frame("login"))
         self.options_menu.add_command(label="Disconnect", command=self.disconnect)
         self.options_menu.add_separator()
         self.options_menu.add_command(label="Exit", command=self.exit)
@@ -77,7 +78,7 @@ class Client:
         self.channel_menu.add_command(label="Status", command=lambda: self.view_frame("status"))
         self.menu_bar.add_cascade(label="Channels", menu=self.channel_menu)
 
-        self.current_frame = self.start_frame
+        self.current_frame = self.login_frame
         self.root.config(menu=self.menu_bar)
         self.root.protocol("WM_DELETE_WINDOW", self.exit)
         self.root.mainloop()
@@ -87,13 +88,28 @@ class Client:
         self.root.title(f"Omegachat - logged in as {title}")
     def frame_resizing(self, event) -> None:
         self.chat_frame.config(width=event.width)
-    def view_frame(self, frame: str) -> None:
-        self.current_frame.forget()
+    def view_frame(self, frame) -> None:
+        if self.current_frame == self.status_frame or self.login_frame:
+            self.current_frame.forget()
+        else:
+            self.current_frame.frame.forget()
         if frame == "status":
             self.current_frame = self.status_frame
             self.status_frame.pack(fill="both", expand=True)
             self.status_entry.pack(fill="x", side="bottom")
             self.status_window.pack(side="top", fill="both", expand=True)
+        elif frame == "login":
+            self.current_frame = self.login_frame
+            self.login_frame.pack(fill="both", expand=True)
+            self.nick_entry.pack(pady=10, padx=2)
+            self.host_entry.pack(pady=10, padx=2)
+            self.port_entry.pack(pady=10, padx=2)
+            self.login_button.pack(anchor="center", pady=10)
+        else:
+            self.current_frame = frame
+            self.current_frame.frame.pack(fill="both", expand=True)
+
+
     def internal_message(self, message: str) -> None: # local messages to chat window from the app
         self.status_window.config(state="normal")
         self.status_window.insert(tk.END, f"{message}\n")
@@ -120,11 +136,28 @@ class Client:
         if command == "/disconnect":
             self.disconnect()
         elif command[0:5] == "/nick":
-            self.internal_message(f"New nick is {command[6:]}")
+            command = command[6:]
+            self.internal_message(f"New nick is {command}")
         elif command[0:5] == "/join":
-            self.internal_message(f"You joined {command[6:]}")
+            command = command[6:]
+            self.internal_message(f"Joining {command}")
+            self.join_new_channel(command)
         else:
             self.internal_message("Command not found.")
+
+    def join_new_channel(self, channel_name):
+        for channel in self.channels:
+            if channel.get_name() == channel_name:
+                self.internal_message(f"Already in {channel_name}")
+                break
+        new_channel = Channel(channel_name)
+        self.channels.append(new_channel)
+        self.channels_menu(new_channel.get_name(), True)
+        self.view_frame(new_channel)
+
+
+        # self.chat_frame.pack(fill="both", side="left", expand=True)
+        # self.channels_menu("General")
 
     # handle input from user
     def client_input_handling(self, message: str) -> None:
@@ -149,7 +182,7 @@ class Client:
         self.chat_window.forget()
         self.alias_list.forget()
         self.change_window_title("Not connected")
-        self.start_frame.pack(fill="both", expand=True)
+        self.login_frame.pack(fill="both", expand=True)
 
     def exit(self) -> None:
         if tk.messagebox.askokcancel("Quit", "Are you sure you want to quit?"):
@@ -210,14 +243,6 @@ class Client:
                 self.view_frame("status")
                 self.internal_message(f"Connected to {HOST}.")
                 self.internal_message(f"Welcome to our server. Join a channel by typing /join channelname")
-
-                #self.chat_frame.pack(fill="both", side="left", expand=True)
-                #self.client_frame.pack(fill="both", side="right")
-                #self.chat_message.pack(fill="x", side="bottom")
-                #self.chat_window.pack(side="top", fill="both", expand=True)
-                #self.alias_list.pack(fill="both", expand=True)
-                #self.change_window_title(self.nickname)
-                #self.channels_menu("General")
                 time.sleep(1)
         except Exception as e:
             print(f"Connection-error: {e}")
