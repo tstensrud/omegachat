@@ -33,11 +33,9 @@ class UserList:
         self.count = len(self.users)
     def add_user(self, user) -> None:
         self.users.append(user)
-        self.users.sort()
         self.count += 1
     def remove_user(self, user) -> None:
         self.users.pop(self.users.index(user))
-        self.users.sort()
         self.count -= 1
 
     def get_users(self) -> List[str]:

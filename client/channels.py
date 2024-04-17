@@ -3,8 +3,9 @@ import customtkinter as ctk
 from CTkListbox import *
 
 class Channel:
-    def __init__(self, name: str):
+    def __init__(self, id: int, name: str):
         self.name = name
+        self.id = id
         self.frame = tk.Frame()
         self.frame.bind = ("<Configure>", self.frame_resizing)
         self.client_frame = ctk.CTkFrame(self.frame)
@@ -24,14 +25,27 @@ class Channel:
 
     def frame_resizing(self, event) -> None:
         self.frame.config(width=event.width)
-
-    def read_chat_message_entry(self, event) -> str:
-        return self.chat_message.get()
-    def insert_chat_msg(self, message: str) -> None:
-        self.chat_window.insert(tk.END, f"{message}\n")
-
     def get_name(self):
         return self.name
-
-    def forget(self):
+    def hide_frame(self):
         self.frame.forget()
+    def get_id(self) -> int:
+        return self.id
+
+    def read_chat_message_entry(self, event) -> str:
+        message = self.chat_message.get()
+        self.chat_message.delete(0, tk.END)
+        self.client_input_handling(message)
+
+    def insert_chat_msg(self, message: str) -> None:
+        self.chat_window.configure(state="normal")
+        self.chat_window.insert(tk.END, f"{message}\n")
+        self.chat_window.configure(state="disabled")
+        self.chat_window.yview(tk.END)
+
+    def client_input_handling(self, message: str) -> None:
+        if message[0] == "/":
+            pass
+        else:
+            #self.broadcast_msg_to_server("msg", message, self.current_channel.get_name())
+            self.insert_chat_msg(message)

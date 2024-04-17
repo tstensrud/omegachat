@@ -46,23 +46,8 @@ class Client:
         self.login_button.pack(anchor="center", pady=10)
 
         # status frame
-        self.status_frame = ctk.CTkFrame(self.root)
-        self.status_window = ctk.CTkTextbox(self.status_frame, wrap=tk.WORD)
-        self.status_window.configure(state="disabled")
-        self.status_entry = ctk.CTkEntry(self.status_frame)
-        self.status_entry.bind('<Return>', self.read_chat_message_entry)
-
-
-        self.chat_frame = ctk.CTkFrame(self.root)
-        self.chat_frame.bind = ("<Configure>", self.frame_resizing)
-        self.client_frame = ctk.CTkFrame(self.root, width=200)
-        self.chat_message = ctk.CTkEntry(self.chat_frame)
-        self.chat_message.bind('<Return>', self.read_chat_message_entry)
-        self.chat_window = ctk.CTkTextbox(self.chat_frame, wrap=tk.WORD)
-        self.chat_window.configure(state="disabled")
-        self.alias_list = tk.Listbox(self.client_frame, width=25)
-        self.alias_list.config(activestyle="none")
-
+        self.status_channel = Channel(0, "status")
+        self.channels.append(self.status_channel)
         # menu
         self.menu_bar = tk.Menu(self.root)
         self.options_menu = tk.Menu(self.menu_bar, tearoff=0)
@@ -72,10 +57,10 @@ class Client:
         self.options_menu.add_command(label="Exit", command=self.exit)
         self.menu_bar.add_cascade(label="Options", menu=self.options_menu)
         self.channel_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.channel_menu.add_command(label="Status", command=lambda: self.view_frame("status"))
+        self.channel_menu.add_command(label="Status", command=lambda: self.view_frame(self.status_channel))
         self.menu_bar.add_cascade(label="Channels", menu=self.channel_menu)
 
-        self.current_frame = self.login_frame
+        self.current_channel = self.login_frame
         self.root.config(menu=self.menu_bar)
         self.root.protocol("WM_DELETE_WINDOW", self.exit)
         self.root.mainloop()
@@ -85,34 +70,28 @@ class Client:
         self.root.title(f"Omegachat - logged in as {title}")
 
     def frame_resizing(self, event) -> None:
-        self.chat_frame.configure(width=event.width)
+        self.login_frame.configure(width=event.width)
 
-    def view_frame(self, frame) -> None:
-        if frame == "status":
-            self.current_frame.forget()
-            self.current_frame = self.status_frame
-            self.status_frame.pack(fill="both", expand=True)
-            self.status_entry.pack(fill="x", side="bottom")
-            self.status_window.pack(side="top", fill="both", expand=True)
-        elif frame == "login":
-            self.current_frame.forget()
-            self.current_frame = self.login_frame
+    def view_frame(self, channel_frame) -> None:
+        if channel_frame == "login": # option from top menu
+            self.current_channel.hide_frame()
+            self.current_channel = self.login_frame
             self.login_frame.pack(fill="both", expand=True)
             self.nick_entry.pack(pady=10, padx=2)
             self.host_entry.pack(pady=10, padx=2)
             self.port_entry.pack(pady=10, padx=2)
             self.login_button.pack(anchor="center", pady=10)
         else:
-            self.current_frame.forget()
-            self.current_frame = frame
-            self.current_frame.frame.pack(fill="both", expand=True)
+            if self.current_channel == self.login_frame:
+                self.current_channel.forget()
+            else:
+                self.current_channel.frame.hide_frame()
+            self.current_channel = channel_frame
+            self.current_channel.frame.pack(fill="both", expand=True)
 
-
-    def internal_message(self, message: str) -> None: # local messages to chat window from the app
-        self.status_window.configure(state="normal")
-        self.status_window.insert(tk.END, f"{message}\n")
-        self.status_window.configure(state="disabled")
-        self.status_window.yview(tk.END)
+    # local messages to chat window from the app. always sent to status-frame
+    def internal_message(self, message: str) -> None:
+        self.status_channel.insert_chat_msg(message)
 
     def update_alias_list(self, packet) -> None:
         self.alias_list.delete(0, tk.END)
@@ -127,26 +106,20 @@ class Client:
         else:
             pass # remove menu-item
 
-    def read_chat_message_entry(self, event): # read chat entry-field
-        entry = self.status_entry.get()
-        self.status_entry.delete(0, tk.END)
-        self.client_input_handling(entry)
-
-    
     # chat command-shortcuts
     def chat_commands(self, command: str) -> None:
         if command == "/disconnect":
             self.disconnect()
         elif command[0:5] == "/nick":
-            command = command[6:]
-            self.internal_message(f"New nick is {command}")
+            nickname = command[6:]
+            self.internal_message(f"New nick is {nickname}")
         elif command[0:5] == "/join":
-            command = command[6:]
-            self.internal_message(f"Joining {command}")
-            self.join_channel(command)
+            channel_name = command[6:]
+            self.internal_message(f"Joining {channel_name}")
+            self.join_channel(channel_name)
         elif command[0:6] == "/leave":
-            command = command[7:]
-            self.internal_message(f"Left {command}")
+            channel_name = command[7:]
+            self.internal_message(f"Left {channel_name}")
         else:
             self.internal_message("Command not found.")
 
@@ -155,30 +128,39 @@ class Client:
             if channel.get_name() == channel_name:
                 self.internal_message(f"Already in {channel_name}")
                 break
-        new_channel = Channel(channel_name)
+        new_channel = Channel(len(self.channels) + 1, channel_name)
         self.channels.append(new_channel)
         self.channels_menu(new_channel, True)
         self.broadcast_msg_to_server("join", channel_name, None)
         time.sleep(1)
         self.view_frame(new_channel)
 
-    def get_channel(self, channel_name: str):
-        for channel in self.channels:
-            if channel.get_name() == channel_name:
-                print(channel.get_name())
-                return channel
-        return None
+    def get_channel(self, channel_name: str) -> Channel:
+        channel = None
+        for channel_object in self.channels:
+            if channel_object.get_name() == channel_name:
+                channel = channel_object
+                break
+        return channel
 
     # handle input from user
+
+    def read_chat_message_entry(self, event) -> str:
+        message = self.current_channel.read_chat_message_entry()
+        print(message)
+        self.client_input_handling(message)
+        
     def client_input_handling(self, message: str) -> None:
         if message[0] == "/":
             self.chat_commands(message)
-            self.chat_message.delete(0, tk.END)
-            self.chat_window.yview(tk.END)
         else:
-            self.broadcast_msg_to_server(message)
-            self.chat_message.delete(0, tk.END)
-            self.chat_window.yview(tk.END)
+            message = self.active_chat_entry.get()
+            if self.current_channel.get_name() == "status":
+                self.internal_message(message)
+            else:
+                #self.broadcast_msg_to_server("msg", message, self.current_channel.get_name())
+                self.internal_message(message)
+
 
     # disconnect from server
     def disconnect(self) -> None:
@@ -206,21 +188,32 @@ class Client:
         while self.stop_flag == True:
             try:
                 packet = pickle.loads(self.socket.recv(self.buffer_size))
-                packet_id = packet.id
-                packet_date = packet.date
-                packet_owner = packet.owner
-                packet_content = packet.content
-                packet_channel = packet.channel
-                if packet_id == "msg":
-                    channel = self.get_channel(packet_channel)
-                    print(f"CHANNEL: {channel}")
-                    channel.chat_window.configure(state="normal")
-                    channel.chat_window.insert(tk.END, f"[{packet_date}] <{packet_owner}> {packet_content}\n")
-                    channel.chat_window.configure(state="disabled")
-                    channel.chat_window.yview(tk.END)
-                elif packet_id == "uptusr":
+                if packet.id == "msg": # packet_content is a string
+                    if packet.channel != None:
+                        channel = self.get_channel(packet.channel)
+                        channel.chat_window.configure(state="normal")
+                        channel.insert_chat_msg(f"[{packet.date}] <{packet.owner}> {packet.content}\n")
+                        channel.chat_window.configure(state="disabled")
+                        channel.chat_window.yview(tk.END)
+                    else:
+                        self.internal_message(packet.content)
+                elif packet.id == "join": # packet_content is a string
+                    try:
+                        channel = self.get_channel(packet.channel)
+                        self.internal_message(f"Joined {packet.channel}")
+                        channel.chat_window.configure(state="normal")
+                        channel.insert_chat_msg(packet.content)
+                        channel.chat_window.configure(state="disabled")
+                    except Exception as e:
+                        print(f"Error on joining: {e}")
+
+                elif packet.id == "uptusr": # packet_content is a list
                     #self.update_alias_list(packet.content)
                     pass
+            except EOFError as eof:
+                print(f"EOFerror: {eof}")
+                self.socket.close()
+                break
             except Exception as e:
                 print(f"Client disconnected: {e} \n")
                 self.socket.close()
@@ -241,6 +234,7 @@ class Client:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
+            self.internal_message("--// STATUS //--")
             self.internal_message(f"Connecting to: {HOST}:{PORT}")
             self.socket.send(pickle.dumps(f"{nick}")) # send nick to server
             nick_response = pickle.loads(self.socket.recv(self.buffer_size)) # receives response on nick. will be "err-1" if nick is taken
@@ -252,8 +246,7 @@ class Client:
             else:
                 self.new_messages_from_server_thread(True)
                 self.nickname = nick
-                # forget login-frame and pack the chat-frames
-                self.view_frame("status")
+                self.view_frame(self.channels[0])
                 self.internal_message(f"Connected to {HOST}.")
                 self.internal_message(f"Welcome to our server. Join a channel by typing /join channel_name")
                 time.sleep(1)

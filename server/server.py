@@ -44,6 +44,7 @@ class OmegachatServer:
         self.menu_bar.add_cascade(label="Server options", menu=self.options_menu)
         self.users_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.users_menu.add_command(label="List users", command=self.list_connected_users)
+        self.users_menu.add_command(label="List channels", command=self.list_all_channels)
         self.menu_bar.add_cascade(label="User options", menu=self.users_menu)
         
         self.root.config(menu=self.menu_bar)
@@ -103,6 +104,10 @@ class OmegachatServer:
             self.server_message("Connected users nicknames and IPs:", False)
             for client in self.clients:
                 self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
+    # list all channels
+    def list_all_channels(self):
+        for channel in self.channels:
+            self.server_message(f"Channel: {channel.get_name()}", False)
 
     # find all nicknames from clients-list and return them as a sorted list
     def get_nicknames_list(self) -> List[str]:
@@ -118,11 +123,21 @@ class OmegachatServer:
             new_channel = Channel(channel, "MOTD")
             new_channel.active_users.add_user(client)
             self.channels.append(new_channel)
-            client.get_socket.send(pickle.dumps(Packet("msg", self.date(), None, new_channel.motd, channel))) # channel for some reason is None
+            response = pickle.dumps(Packet("join", self.date(), None, new_channel.get_motd(), channel))
+            try:
+                client.get_socket().send(response)
+            except Exception as e:
+                self.server_message(f"Error: {e}", True)
         else:
+            print(f"existing channel: {channel}")
             existing_channel = self.get_channel(channel)
             existing_channel.active_users.add_user(client)
-            client.get_socket.send(pickle.dumps(Packet("msg", self.date(), None, existing_channel.motd, channel)))
+            response = pickle.dumps(Packet("join", self.date(), None, existing_channel.get_motd(), channel))
+            try:
+                client.get_socket().send(response)
+            except Exception as e:
+                self.server_message(f"Error: {e}", True)
+
 
     # searches for existing channel. returns None if not found
     def get_channel(self, channel: str):
@@ -140,8 +155,9 @@ class OmegachatServer:
 
     # broadcast message to correct channel
     # message is an object of Message
-    def broadcast(self, message) -> None:
-        message_out = pickle.dumps(message)
+    def broadcast(self, packet) -> None:
+
+        message_out = pickle.dumps(packet)
         for client in self.clients:
             try:
                 client.get_socket().send(message_out)
@@ -162,23 +178,17 @@ class OmegachatServer:
         while self.server_running == True:
             try:
                 packet = pickle.loads(client_socket.recv(self.buffer_size))
-                packet_id = packet.id
-                packet_date = packet.date
-                packet_owner = packet.owner
-                packet_content = packet.content
-                packet_channel = packet.channel
-
-                if packet_id == "msg":
+                if packet.id == "msg":
                     self.broadcast(packet)
-                elif packet_id == "join":
-                    self.server_message("Got join message", True)
-                    self.join_channel(packet_content, client)
+                elif packet.id == "join":
+                    self.server_message(f"Got join message from {nick_name}", True)
+                    self.join_channel(packet.content, client)
             except:
-                quit_msg = Packet("msg", self.date(), nick_name, "has left the left", None)
+                quit_msg = Packet("msg", self.date(), nick_name, "has left the chat", None)
                 self.broadcast(quit_msg)
                 self.channel_general.active_users.remove_user(nick_name)
-                remove_from_clients = Packet("uptusr", None, None, self.channel_general.active_users.get_users(), None)
-                self.broadcast(remove_from_clients)
+                #remove_from_clients = Packet("uptusr", None, None, self.channel_general.active_users.get_users(), None)
+                #self.broadcast(remove_from_clients)
                 client_socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
                 break
@@ -196,12 +206,11 @@ class OmegachatServer:
                 client = ServerClient(client_socket, ip, nickname)
                 self.clients.append(client)
                 nickname = client.get_nickname()
-                welcome_msg = Packet("msg", self.date(), nickname, f"has joined the chat.", None)
+                welcome_msg = Packet("msg", self.date(), nickname, f"{nickname} has disconnected.", None)
                 self.broadcast(welcome_msg)
-                #self.main_channel.active_users.users.append(nickname)
                 self.channel_general.active_users.add_user(nickname)
-                add_to_other_clients = Packet("uptusr", None, None, self.channel_general.active_users.get_users(), None)
-                self.broadcast(add_to_other_clients)
+                #add_to_other_clients = Packet("uptusr", None, None, self.channel_general.active_users.get_users(), None)
+                #self.broadcast(add_to_other_clients)
                 time.sleep(1)
                 thread = threading.Thread(target=self.handle, args=(client,))
                 thread.daemon = True
