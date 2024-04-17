@@ -19,8 +19,10 @@ class OmegachatServer:
         self.buffer_size = 2048
         self.server = None
         self.clients = [] # list of client objects
+        self.channels = []
         self.server_running = False
         self.channel_general = Channel("General", "Welcome to the main-channel!")
+        self.channels.append(self.channel_general)
 
         self.root = tk.Tk()
         self.root.title("Omegachat - SERVER")
@@ -110,8 +112,33 @@ class OmegachatServer:
         nicknames.sort()
         return nicknames
 
+    # if channel exists, add user to its user list. If not create new channel
+    def join_channel(self, channel: str, client) -> None:
+        if self.get_channel(channel) == None:
+            new_channel = Channel(channel, "MOTD")
+            new_channel.active_users.add_user(client)
+            self.channels.append(new_channel)
+            client.get_socket.send(pickle.dumps(Packet("msg", self.date(), None, new_channel.motd, channel))) # channel for some reason is None
+        else:
+            existing_channel = self.get_channel(channel)
+            existing_channel.active_users.add_user(client)
+            client.get_socket.send(pickle.dumps(Packet("msg", self.date(), None, existing_channel.motd, channel)))
 
-    # broadcast message to all connected users
+    # searches for existing channel. returns None if not found
+    def get_channel(self, channel: str):
+        for channel_object in self.channels:
+            if channel_object.get_name() == channel:
+                return channel_object
+        return None
+
+    def send_to_single_client(self, msg_id, message, client) -> None:
+        message_out = Packet(msg_id, self.date(), None, message, None)
+        try:
+            client.get_socket.send(pickle.dumps(message_out))
+        except Exception as e:
+            self.server_message(f"Error: {e}", True)
+
+    # broadcast message to correct channel
     # message is an object of Message
     def broadcast(self, message) -> None:
         message_out = pickle.dumps(message)
@@ -134,9 +161,18 @@ class OmegachatServer:
         nick_name = client.get_nickname()
         while self.server_running == True:
             try:
-                message = pickle.loads(client_socket.recv(self.buffer_size))
-                if message.id == "msg":
-                    self.broadcast(message)
+                packet = pickle.loads(client_socket.recv(self.buffer_size))
+                packet_id = packet.id
+                packet_date = packet.date
+                packet_owner = packet.owner
+                packet_content = packet.content
+                packet_channel = packet.channel
+
+                if packet_id == "msg":
+                    self.broadcast(packet)
+                elif packet_id == "join":
+                    self.server_message("Got join message", True)
+                    self.join_channel(packet_content, client)
             except:
                 quit_msg = Packet("msg", self.date(), nick_name, "has left the left", None)
                 self.broadcast(quit_msg)

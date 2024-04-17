@@ -31,12 +31,12 @@ class UserList:
 
     def update_user_count(self) -> None:
         self.count = len(self.users)
-    def add_user(self, user: str) -> None:
+    def add_user(self, user) -> None:
         self.users.append(user)
         self.users.sort()
         self.count += 1
-    def remove_user(self, username: str) -> None:
-        self.users.pop(self.users.index(username))
+    def remove_user(self, user) -> None:
+        self.users.pop(self.users.index(user))
         self.users.sort()
         self.count -= 1
 
