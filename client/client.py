@@ -71,8 +71,8 @@ class Client:
         self.root.mainloop()
 
     # methods for GUI handling
-    def change_window_title(self, title: str) -> None:
-        self.root.title(f"Omegachat - logged in as {title}")
+    def change_window_title(self, channel: str) -> None:
+        self.root.title(f"Omegachat - logged in as {self.nickname} -> in {channel}")
 
     def frame_resizing(self, event) -> None:
         self.login_frame.configure(width=event.width)
@@ -95,14 +95,15 @@ class Client:
             self.current_channel = channel_frame
             self.current_channel.frame.pack(fill="both", expand=True)
             self.chat_message.pack(fill="x", side="bottom")
+            self.change_window_title(self.current_channel.get_name())
 
     # local messages to chat window from the app. always sent to status-frame
     def internal_message(self, message: str) -> None:
         self.status_channel.insert_chat_msg(message)
 
-    def update_alias_list(self, packet, add: bool) -> None:
+    def update_alias_list(self, packet) -> None:
         channel = self.get_channel(packet.channel)
-        channel.update_alias_listbox(packet.content, packet.owner, add)
+        channel.update_alias_listbox(packet.content)
 
     def channels_menu(self, new_channel: Channel, add: bool) -> None:
         channel_name = new_channel.get_name()
@@ -123,11 +124,10 @@ class Client:
             self.internal_message(f"Joining {channel_name}")
             self.join_channel(channel_name)
         elif command[0:6] == "/leave":
-            channel_name = command[7:]
-            self.internal_message(f"Left {channel_name}")
-            self.leave_channel(channel_name)
+            self.leave_channel(self.current_channel.get_name())
+            self.internal_message(f"Left {self.current_channel}")
         else:
-            self.internal_message("Command not found.")
+            self.current_channel.insert_chat_msg("Command not found.")
 
     def get_channel_index(self, channel_name: str) -> int:
         for i in range(len(self.channels)):
@@ -153,7 +153,8 @@ class Client:
         channel.frame.destroy()
         time.sleep(1)
         self.view_frame(self.channels[0])
-        self.broadcast_msg_to_server("leave", "has lef the channel", channel_name)
+        self.broadcast_msg_to_server("leave", " has lef the channel.", channel_name)
+
 
     def get_channel(self, channel_name: str) -> Channel:
         channel = None
@@ -187,6 +188,7 @@ class Client:
             time.sleep(1)
         self.change_window_title("Not connected")
         self.login_frame.pack(fill="both", expand=True)
+        self.login_widgets_control(False)
 
     def exit(self) -> None:
         if tk.messagebox.askokcancel("Quit", "Are you sure you want to quit?"):
@@ -212,9 +214,7 @@ class Client:
                     else:
                         self.internal_message(packet.content)
                 elif packet.id == "updusr":
-                    self.update_alias_list(packet, True)
-                elif packet.id == "rmvusr":
-                    self.update_alias_list(packet, False)
+                    self.update_alias_list(packet)
                 elif packet.id == "join": # if true packet_content is a string
                     try:
                         channel = self.get_channel(packet.channel)
@@ -222,6 +222,8 @@ class Client:
                         channel.insert_chat_msg(packet.content)
                     except Exception as e:
                         print(f"Error on joining: {e}")
+                elif packet.id == "server":
+                    self.internal_message(packet.content)
             except EOFError as eof:
                 print(f"EOFerror: {eof}")
                 self.socket.close()
@@ -230,6 +232,19 @@ class Client:
                 print(f"Client disconnected: {e}\n")
                 self.socket.close()
                 break
+
+    # disable login-widgest when connected to avoid trying to connect while connection is up
+    def login_widgets_control(self, connected: bool):
+        if connected == True:
+            self.nick_entry.configure(state="disabled")
+            self.host_entry.configure(state="disabled")
+            self.port_entry.configure(state="disabled")
+            self.login_button.configure(state="disabled")
+        else:
+            self.nick_entry.configure(state="normal")
+            self.host_entry.configure(state="normal")
+            self.port_entry.configure(state="normal")
+            self.login_button.configure(state="normal")
 
     # logging in and establishing connection to the server through a web socket.
     # if chosen nickname is already taken it closes the socket and returns
@@ -261,6 +276,8 @@ class Client:
                 self.view_frame(self.channels[0])
                 self.internal_message(f"Connected to {HOST}.")
                 self.internal_message(f"Welcome to our server. Join a channel by typing /join channel_name")
+                self.login_widgets_control(True)
+
                 time.sleep(1)
         except Exception as e:
             print(f"Connection-error: {e}")
@@ -275,9 +292,9 @@ class Client:
             self.stop_flag = False
     
     # broadcast encoded message to server
-    def broadcast_msg_to_server(self, id: str, packet, channel: str) -> None:
+    def broadcast_msg_to_server(self, packet_id: str, content, channel: str) -> None:
         date = datetime.datetime.now().strftime("%H:%M:%S")
-        new_packet = Packet(id, date, self.nickname, packet, channel)
+        new_packet = Packet(packet_id, date, self.nickname, content, channel)
         try:
             self.socket.send(pickle.dumps(new_packet))
         except Exception as e:

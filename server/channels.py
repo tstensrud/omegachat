@@ -37,7 +37,7 @@ class UserList:
         self.users.append(user)
         self.count += 1
 
-    def remove_user(self, user) -> None:
+    def remove_user(self, user: str) -> None:
         self.users.pop(self.users.index(user))
         self.count -= 1
 

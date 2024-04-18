@@ -6,7 +6,7 @@ class Channel:
     def __init__(self, id: int, name: str):
         self.name = name
         self.id = id
-        self.active_users = []
+        #self.active_users = []
         self.frame = tk.Frame()
         self.frame.bind = ("<Configure>", self.frame_resizing)
         self.client_frame = ctk.CTkFrame(self.frame)
@@ -29,11 +29,7 @@ class Channel:
     def get_id(self) -> int:
         return self.id
 
-    def update_alias_listbox(self, user_list, new_user, add: bool) -> None:
-        if add == True:
-            self.active_users.append(new_user)
-        elif add == False:
-            self.active_users.pop(self.active_users.index(new_user))
+    def update_alias_listbox(self, user_list) -> None:
         self.alias_list.delete(0, tk.END)
         for user in user_list:
             self.alias_list.insert(tk.END, user)

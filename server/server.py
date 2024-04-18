@@ -18,8 +18,8 @@ class OmegachatServer:
         self.PORT = 55555
         self.buffer_size = 2048
         self.server = None
-        self.clients = [] # list of client objects
-        self.channels = []
+        self.clients = [] # list of connected client objects
+        self.channels = [] # list of channel objects
         self.server_running = False
         self.channel_general = Channel("General", "Welcome to the main-channel!")
         self.channels.append(self.channel_general)
@@ -98,16 +98,22 @@ class OmegachatServer:
 
     # list all connected users in the server-output
     def list_connected_users(self):
-        if len(self.clients) == 0:
-            self.server_message("No users connected", False)
+        if self.server_running:
+            if len(self.clients) == 0:
+                self.server_message("No users connected", False)
+            else:
+                self.server_message("Connected users nicknames and IPs:", False)
+                for client in self.clients:
+                    self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
         else:
-            self.server_message("Connected users nicknames and IPs:", False)
-            for client in self.clients:
-                self.server_message(f"Address: {client.get_address()}, username: {client.get_nickname()}", False)
+            self.server_message("Server is not running", False)
     # list all channels
     def list_all_channels(self):
-        for channel in self.channels:
-            self.server_message(f"Channel: {channel.get_name()} - {channel.get_user_list().get_users()}", False)
+        if self.server_running:
+            for channel in self.channels:
+                self.server_message(f"Channel: {channel.get_name()} - {channel.get_user_list().get_users()}", False)
+        else:
+            self.server_message("Server is not running.", False)
 
     # find all nicknames from clients-list and return them as a sorted list
     def get_nicknames_list(self) -> List[str]:
@@ -142,15 +148,26 @@ class OmegachatServer:
             client.get_socket().send(response)
         except Exception as e:
             self.server_message(f"Error: {e}", True)
+        self.get_user_object(nick_name).add_channel(channel)
         updated_list = Packet("updusr", self.date(), nick_name, channel_user_list, channel)
         self.broadcast(updated_list)
 
     def leave_channel(self, packet) -> None:
         channel_object = self.get_channel_object(packet.channel)
         channel_object.get_user_list().remove_user(packet.owner)
+        self.get_user_object(packet.owner).remove_channel(packet.channel)
+        if len(channel_object.get_user_list().get_users()) == 0:
+            index = self.get_channel_index(channel_object.get_name())
+            self.channels.pop(index)
+        else:
+            update_to_users = Packet("updusr", self.date(), packet.owner, channel_object.get_user_list().get_users(), packet.channel)
+            self.broadcast(update_to_users)
 
-        self.broadcast(packet)
-
+    # removes user from all channels in case of diconnect. Either by user exiting or network trouble
+    def client_quit(self, client):
+        client_channel_list = client.get_channels()
+        for channel in client_channel_list:
+            self.get_channel_object(channel).get_user_list().remove_user(client.get_nickname())
 
     def get_user_object(self, nickname):
         for user_object in self.clients:
@@ -178,6 +195,12 @@ class OmegachatServer:
             if channel.get_name() == channel_name:
                 user_list = channel.get_user_list().get_users()
                 return user_list
+
+    def get_channel_index(self, channel_name: str) -> int:
+        for i in range(len(self.channels)):
+            if self.channels[i].get_name() == channel_name:
+                return i
+        return -1
 
     # broadcast message to correct channel
     # message is an object of Message
@@ -218,9 +241,7 @@ class OmegachatServer:
                 elif packet.id == "leave":
                     self.leave_channel(packet)
             except:
-                quit_msg = Packet("msg", self.date(), nick_name, "has quit", None)
-                self.broadcast(quit_msg)
-
+                self.client_quit(client)
                 client_socket.close()
                 self.clients.pop(self.return_client_index(nick_name))
                 break
@@ -238,8 +259,8 @@ class OmegachatServer:
                 client = ServerClient(client_socket, ip, nickname)
                 self.clients.append(client)
                 nickname = client.get_nickname()
-                welcome_msg = Packet("msg", self.date(), nickname, f"{nickname} has connected.", None)
-                self.broadcast(welcome_msg)
+                welcome_msg = Packet("server", self.date(), nickname, f"Successfully connected", None)
+                client_socket.send(pickle.dumps(welcome_msg))
                 time.sleep(1)
                 thread = threading.Thread(target=self.handle, args=(client,))
                 thread.daemon = True
