@@ -45,9 +45,14 @@ class Client:
         self.login_button = ctk.CTkButton(self.login_frame, text="Login", command=self.login_gui)
         self.login_button.pack(anchor="center", pady=10)
 
+        # entry-field for chat
+        self.chat_message = ctk.CTkEntry(self.root)
+        self.chat_message.bind('<Return>', self.read_chat_message_entry)
+
         # status frame
         self.status_channel = Channel(0, "status")
         self.channels.append(self.status_channel)
+
         # menu
         self.menu_bar = tk.Menu(self.root)
         self.options_menu = tk.Menu(self.menu_bar, tearoff=0)
@@ -81,30 +86,30 @@ class Client:
             self.host_entry.pack(pady=10, padx=2)
             self.port_entry.pack(pady=10, padx=2)
             self.login_button.pack(anchor="center", pady=10)
+            self.chat_message.forget()
         else:
             if self.current_channel == self.login_frame:
                 self.current_channel.forget()
             else:
-                self.current_channel.frame.hide_frame()
+                self.current_channel.hide_frame()
             self.current_channel = channel_frame
             self.current_channel.frame.pack(fill="both", expand=True)
+            self.chat_message.pack(fill="x", side="bottom")
 
     # local messages to chat window from the app. always sent to status-frame
     def internal_message(self, message: str) -> None:
         self.status_channel.insert_chat_msg(message)
 
-    def update_alias_list(self, packet) -> None:
-        self.alias_list.delete(0, tk.END)
-        new_alias_list = packet
-        for new_alias in new_alias_list:
-            self.alias_list.insert(tk.END, new_alias)
+    def update_alias_list(self, packet, add: bool) -> None:
+        channel = self.get_channel(packet.channel)
+        channel.update_alias_listbox(packet.content, packet.owner, add)
 
     def channels_menu(self, new_channel: Channel, add: bool) -> None:
+        channel_name = new_channel.get_name()
         if add == True:
-            channel_name = new_channel.get_name()
             self.channel_menu.add_command(label=channel_name, command=lambda: self.view_frame(new_channel))
         else:
-            pass # remove menu-item
+            self.channel_menu.delete(self.channel_menu.index(channel_name))
 
     # chat command-shortcuts
     def chat_commands(self, command: str) -> None:
@@ -120,8 +125,15 @@ class Client:
         elif command[0:6] == "/leave":
             channel_name = command[7:]
             self.internal_message(f"Left {channel_name}")
+            self.leave_channel(channel_name)
         else:
             self.internal_message("Command not found.")
+
+    def get_channel_index(self, channel_name: str) -> int:
+        for i in range(len(self.channels)):
+            if self.channels[i].get_name() == channel_name:
+                return i
+        return -1
 
     def join_channel(self, channel_name: str) -> None:
         for channel in self.channels:
@@ -135,6 +147,14 @@ class Client:
         time.sleep(1)
         self.view_frame(new_channel)
 
+    def leave_channel(self, channel_name: str) -> None:
+        channel = self.channels.pop(self.get_channel_index(channel_name))
+        self.channels_menu(channel, False)
+        channel.frame.destroy()
+        time.sleep(1)
+        self.view_frame(self.channels[0])
+        self.broadcast_msg_to_server("leave", "has lef the channel", channel_name)
+
     def get_channel(self, channel_name: str) -> Channel:
         channel = None
         for channel_object in self.channels:
@@ -145,22 +165,19 @@ class Client:
 
     # handle input from user
 
-    def read_chat_message_entry(self, event) -> str:
-        message = self.current_channel.read_chat_message_entry()
-        print(message)
+    def read_chat_message_entry(self, event):
+        message = self.chat_message.get()
+        self.chat_message.delete(0, tk.END)
         self.client_input_handling(message)
         
     def client_input_handling(self, message: str) -> None:
         if message[0] == "/":
             self.chat_commands(message)
         else:
-            message = self.active_chat_entry.get()
             if self.current_channel.get_name() == "status":
                 self.internal_message(message)
             else:
-                #self.broadcast_msg_to_server("msg", message, self.current_channel.get_name())
-                self.internal_message(message)
-
+                self.broadcast_msg_to_server("msg", message, self.current_channel.get_name())
 
     # disconnect from server
     def disconnect(self) -> None:
@@ -188,34 +205,29 @@ class Client:
         while self.stop_flag == True:
             try:
                 packet = pickle.loads(self.socket.recv(self.buffer_size))
-                if packet.id == "msg": # packet_content is a string
+                if packet.id == "msg": # if true packet_content is a string
                     if packet.channel != None:
                         channel = self.get_channel(packet.channel)
-                        channel.chat_window.configure(state="normal")
-                        channel.insert_chat_msg(f"[{packet.date}] <{packet.owner}> {packet.content}\n")
-                        channel.chat_window.configure(state="disabled")
-                        channel.chat_window.yview(tk.END)
+                        channel.insert_chat_msg(f"[{packet.date}] <{packet.owner}> {packet.content}")
                     else:
                         self.internal_message(packet.content)
-                elif packet.id == "join": # packet_content is a string
+                elif packet.id == "updusr":
+                    self.update_alias_list(packet, True)
+                elif packet.id == "rmvusr":
+                    self.update_alias_list(packet, False)
+                elif packet.id == "join": # if true packet_content is a string
                     try:
                         channel = self.get_channel(packet.channel)
                         self.internal_message(f"Joined {packet.channel}")
-                        channel.chat_window.configure(state="normal")
                         channel.insert_chat_msg(packet.content)
-                        channel.chat_window.configure(state="disabled")
                     except Exception as e:
                         print(f"Error on joining: {e}")
-
-                elif packet.id == "uptusr": # packet_content is a list
-                    #self.update_alias_list(packet.content)
-                    pass
             except EOFError as eof:
                 print(f"EOFerror: {eof}")
                 self.socket.close()
                 break
             except Exception as e:
-                print(f"Client disconnected: {e} \n")
+                print(f"Client disconnected: {e}\n")
                 self.socket.close()
                 break
 
@@ -266,4 +278,7 @@ class Client:
     def broadcast_msg_to_server(self, id: str, packet, channel: str) -> None:
         date = datetime.datetime.now().strftime("%H:%M:%S")
         new_packet = Packet(id, date, self.nickname, packet, channel)
-        self.socket.send(pickle.dumps(new_packet))
+        try:
+            self.socket.send(pickle.dumps(new_packet))
+        except Exception as e:
+            print(f"broadcast error: {e}")
