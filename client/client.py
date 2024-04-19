@@ -79,14 +79,17 @@ class Client:
 
     def view_frame(self, channel_frame) -> None:
         if channel_frame == "login": # option from top menu
-            self.current_channel.hide_frame()
-            self.current_channel = self.login_frame
-            self.login_frame.pack(fill="both", expand=True)
-            self.nick_entry.pack(pady=10, padx=2)
-            self.host_entry.pack(pady=10, padx=2)
-            self.port_entry.pack(pady=10, padx=2)
-            self.login_button.pack(anchor="center", pady=10)
-            self.chat_message.forget()
+            if self.current_channel == self.login_frame:
+                self.current_channel.forget()
+            else:
+                self.current_channel.hide_frame()
+                self.current_channel = self.login_frame
+                self.login_frame.pack(fill="both", expand=True)
+                self.nick_entry.pack(pady=10, padx=2)
+                self.host_entry.pack(pady=10, padx=2)
+                self.port_entry.pack(pady=10, padx=2)
+                self.login_button.pack(anchor="center", pady=10)
+                self.chat_message.forget()
         else:
             if self.current_channel == self.login_frame:
                 self.current_channel.forget()
