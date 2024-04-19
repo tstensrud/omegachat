@@ -6,7 +6,6 @@ class Channel:
     def __init__(self, id: int, name: str):
         self.name = name
         self.id = id
-        #self.active_users = []
         self.frame = tk.Frame()
         self.frame.bind = ("<Configure>", self.frame_resizing)
         self.client_frame = ctk.CTkFrame(self.frame)
@@ -39,3 +38,8 @@ class Channel:
         self.chat_window.insert(tk.END, f"{message}\n")
         self.chat_window.configure(state="disabled")
         self.chat_window.yview(tk.END)
+        self.log(message)
+
+    def log(self, message):
+        with open(f"logs/{self.name}.txt", "a") as file:
+            file.writelines(f"{message}\n")

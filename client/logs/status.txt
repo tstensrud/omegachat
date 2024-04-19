@@ -1,0 +1,4 @@
+--// STATUS //--
+Connecting to: 127.0.0.1:55555
+Connected to 127.0.0.1.
+Welcome to our server. Join a channel by typing /join channel_name

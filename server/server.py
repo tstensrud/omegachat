@@ -60,10 +60,14 @@ class OmegachatServer:
 
     # messages the server writes to its own output
     def server_message(self, message: str, date: bool) -> None:
+        self.output.config(state="normal")
         if date == True:
             self.output.insert(tk.END, f"{self.date()}: {message}\n")
         else:
             self.output.insert(tk.END, f"{message}\n")
+        self.output.config(state="disabled")
+        with open("log.txt", "a") as file:
+            file.write(f"{self.date()}: {message}\n")
         self.output.yview(tk.END)
 
     # start server and thread for accepting new clients
@@ -147,28 +151,37 @@ class OmegachatServer:
         try:
             client.get_socket().send(response)
         except Exception as e:
-            self.server_message(f"Error: {e}", True)
+            self.server_message(f"Error on joining channel: {e}", True)
         self.get_user_object(nick_name).add_channel(channel)
         updated_list = Packet("updusr", self.date(), nick_name, channel_user_list, channel)
         self.broadcast(updated_list)
+
+    def remove_channel_if_channel_is_empty(self, channel: Channel) -> None:
+        index = self.get_channel_index(channel.get_name())
+        self.channels.pop(index)
 
     def leave_channel(self, packet) -> None:
         channel_object = self.get_channel_object(packet.channel)
         channel_object.get_user_list().remove_user(packet.owner)
         self.get_user_object(packet.owner).remove_channel(packet.channel)
         if len(channel_object.get_user_list().get_users()) == 0:
-            index = self.get_channel_index(channel_object.get_name())
-            self.channels.pop(index)
+            self.remove_channel_if_channel_is_empty(channel_object)
         else:
             update_to_users = Packet("updusr", self.date(), packet.owner, channel_object.get_user_list().get_users(), packet.channel)
             self.broadcast(update_to_users)
 
-    # removes user from all channels in case of diconnect. Either by user exiting or network trouble
+    # removes user from all channels in case of diconnect or exit
     def client_quit(self, client):
         client_channel_list = client.get_channels()
         for channel in client_channel_list:
+            channel_object = self.get_channel_object(channel)
             self.get_channel_object(channel).get_user_list().remove_user(client.get_nickname())
+            update_to_users = Packet("updusr", self.date(), client.get_nickname(), channel_object.get_user_list().get_users(), channel_object.get_name())
+            self.broadcast(update_to_users)
 
+            # if client is only user in channel, remove channel from server after user quits
+            if len(channel_object.get_user_list().get_users()) == 0:
+                self.remove_channel_if_channel_is_empty(channel_object)
     def get_user_object(self, nickname):
         for user_object in self.clients:
             if user_object.get_nickname() == nickname:
@@ -186,7 +199,7 @@ class OmegachatServer:
         try:
             client.get_socket.send(pickle.dumps(message_out))
         except Exception as e:
-            self.server_message(f"Error: {e}", True)
+            self.server_message(f"Error sending to single client: {e}", True)
 
     # return the user-list of a channel
     def get_channel_users(self, channel_name: str) -> List[str]:
@@ -213,13 +226,13 @@ class OmegachatServer:
                 try:
                     self.get_user_object(client).get_socket().send(message_out)
                 except Exception as e:
-                    self.server_message(f"Error: {e}", True)
+                    self.server_message(f"Error broadcasting to specific channels: {e}", True)
         else:
             for client in self.clients:
                 try:
                     client.get_socket().send(message_out)
                 except Exception as e:
-                    self.server_message(f"Error: {e}", True)
+                    self.server_message(f"Error broadcasting to all channels: {e}", True)
 
     def return_client_index(self, name: str) -> int:
         for i in range(len(self.clients)):

@@ -8,8 +8,8 @@ import threading
 import datetime
 from typing import List
 from tkinter import messagebox
-from messages import Packet
 from channels import Channel
+from messages import Packet
 
 class Client:
     def __init__(self):
@@ -187,7 +187,7 @@ class Client:
             self.socket.close()
             time.sleep(1)
         self.change_window_title("Not connected")
-        self.login_frame.pack(fill="both", expand=True)
+        self.view_frame("login")
         self.login_widgets_control(False)
 
     def exit(self) -> None:
